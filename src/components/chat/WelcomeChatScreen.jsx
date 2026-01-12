@@ -1,8 +1,13 @@
 import { Box, Typography } from "@mui/material";
 import React from "react";
-import DolphinIcon from "../../assets/images/dolphin_b.png";
-import CapIcon from "../../assets/images/ship.png";
+import DolphinIconB from "../../assets/images/dolphin_b.png";
+import DolphinIconW from "../../assets/images/dolphin_w.png";
+import ShipIconB from "../../assets/images/ship.png";
+import ShipIconW from "../../assets/images/ship_w.png";
+import { useThemeMode } from "../../context/ThemeModeContext";
+
 const WelcomeChatScreen = () => {
+  const { mode } = useThemeMode();
   return (
     <Box
       sx={{
@@ -14,67 +19,103 @@ const WelcomeChatScreen = () => {
     >
       <Box
         sx={{
-          backgroundColor: "#fff",
-          borderRadius: "24px",
-          px: 6,
-          py: 5,
-          maxWidth: 640,
+          backgroundColor: "background.paper",
+          borderRadius: 8,
+          px: 5,
+          py: 3,
+          maxWidth: 500,
           textAlign: "center",
-          boxShadow: "0px 10px 30px rgba(0,0,0,0.08)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 2,
+          border: "1px solid",
+          borderColor: "primary.main",
         }}
       >
         {/* Icons */}
         <Box
           sx={{
             display: "flex",
+            alignItems: "center",
             justifyContent: "center",
             gap: 2,
-            mb: 3,
           }}
         >
           <Box
             component="img"
-            src={DolphinIcon}
+            src={mode === "dark" ? DolphinIconW : DolphinIconB}
             alt="Dolphin"
-            sx={{ width: 40, height: 40 }}
+            sx={{ width: 60, height: 60 }}
           />
           <Box
             component="img"
-            src={CapIcon}
+            src={mode === "dark" ? ShipIconW : ShipIconB}
             alt="Cap"
             sx={{ width: 40, height: 40 }}
           />
         </Box>
 
         {/* Title */}
-        <Typography
+        <Box
           sx={{
-            fontSize: 32,
-            fontWeight: 700,
-            color: "#0a2f4f",
-            mb: 1,
+            display: "flex",
+            gap: 1.5,
+            justifyContent: "center",
+            alignItems: "center",
           }}
         >
-          Dolphin <span style={{ fontWeight: 300 }}>|</span> AI
-        </Typography>
+          <Typography
+            variant="h3"
+            sx={{ fontSize: 20, fontWeight: 700, color: "text.heading1" }}
+          >
+            Dolphin
+          </Typography>
+          <Typography
+            variant="h3"
+            sx={{ fontSize: 20, fontWeight: 700, color: "text.heading1" }}
+          >
+            |
+          </Typography>
+          <Typography
+            variant="h3"
+            sx={{ fontSize: 20, fontWeight: 700, color: "primary.main" }}
+          >
+            AI
+          </Typography>
+        </Box>
 
         {/* Subtitle */}
         <Typography
           sx={{
-            fontSize: 20,
-            fontWeight: 500,
-            color: "#0a2f4f",
-            mb: 2,
+            fontSize: 30,
+            fontWeight: 400,
+            color: "text.heading1",
           }}
         >
-          How can I help you today?
+          How can I{" "}
+          <Box
+            component="span"
+            sx={(theme) => ({
+              background: `linear-gradient(90deg, ${theme.palette.text.heading1}, ${theme.palette.text.heading2})`,
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              fontWeight: 400,
+              paddingLeft: "5px", // 👈 clears the h
+              marginLeft: "-5px",
+            })}
+          >
+            help
+          </Box>{" "}
+          you today?
         </Typography>
 
         {/* Description */}
         <Typography
           sx={{
-            fontSize: 15,
-            color: "#6b7a88",
+            width: "90%",
+            fontSize: 13,
+            color: "text.smallheading",
             lineHeight: 1.7,
           }}
         >

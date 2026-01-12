@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Login from "./pages/LoginSignup";
 import Chatpage from "./pages/chatpage/Chatpage.jsx";
 import './App.css'
+import { logout } from "./api/apiAuth.js";
 
 function App() {
   const [userId, setUserId] = useState(null);
@@ -22,7 +23,8 @@ function App() {
     setUserId(id);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async() => {
+    await logout()
     localStorage.removeItem("userId");
     setUserId(null);
   };
