@@ -6,7 +6,7 @@ import { fetchHealth } from "../../api/fetchApi";
 import axios from "axios";
 import Header from "../../components/header/Header";
 
-const Chatpage = ({ userId, setUserId }) => {
+const Chatpage = ({ userId, setUserId,onLogout }) => {
   const [sessionData, setSessionData] = useState(null);
   const [activeIndex, setActiveIndex] = useState(null);
 
@@ -65,7 +65,7 @@ const Chatpage = ({ userId, setUserId }) => {
   return (
     <Grid container height="100vh" width="100vw" flexDirection="column">
       <Grid item xs={12} sx={{ height: "10vh" }} >
-        <Header/>
+        <Header onLogout={onLogout}/>
       </Grid>
 
       <Grid item xs={12} sx={{ height: "90vh", display: "flex" }}>
@@ -75,6 +75,7 @@ const Chatpage = ({ userId, setUserId }) => {
           activeIndex={activeIndex}
           setActiveIndex={setActiveIndex}
           selectSession={selectSession}
+          
         />
 
         <ChatWindow

@@ -45,7 +45,6 @@ ul,ol{
 
 p {
   margin: 0.4rem 0;
-  color: var(--muted);
 }
 
 .message {
@@ -86,8 +85,6 @@ p {
   border-radius: 10px;
   overflow-x: auto;
 }
-
-
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',

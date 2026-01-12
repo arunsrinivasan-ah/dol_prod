@@ -13,29 +13,15 @@ import {
   minor,
 } from "@mui/material";
 import React, { useState } from "react";
-import SearchIcon from "@mui/icons-material/Search";
 import { ChatItem } from "./ChatItem";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import { useThemeMode } from "../../context/ThemeModeContext";
 import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
 import { Message } from "../../assets/svgIcons/message";
 import TurnedInIcon from "@mui/icons-material/TurnedIn";
-
-const tabStyle = (active) => ({
-  textTransform: "none",
-  px: 0.5,
-  py: 0.5,
-  borderRadius: 2,
-  fontSize: 13,
-  minHeight: 35,
-  fontWeight: 500,
-  color: active ? "#fff" : "#9fb3c8",
-  bgcolor: active ? "primary.main" : "transparent",
-  transition: "all 0.25s ease",
-  "&:hover": {
-    bgcolor: active ? "primary.main" : "rgba(255,255,255,0.08)",
-  },
-});
+import { SaveIcon } from "../../assets/svgIcons/Saveicon";
+import { Search } from "../../assets/svgIcons/Search";
+import { FilterIcon } from "../../assets/svgIcons/FilterIcon";
 
 const ChatSideBar = ({
   sessionData,
@@ -47,6 +33,29 @@ const ChatSideBar = ({
   const { mode, toggleMode } = useThemeMode();
   const [valueTab, setValueTab] = useState(0);
 
+  const tabStyle = (active) => ({
+    flex: 1,
+    textTransform: "none",
+    px: 0.5,
+    py: 0.5,
+    borderRadius: 2,
+    fontSize: 12,
+    minHeight: 35,
+    fontWeight: 500,
+    color: active ? "text.white" : "text.primary",
+    bgcolor: active ? "primary.main" : "transparent",
+    transition: "all 0.25s ease",
+
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 1,
+
+    "&.Mui-selected": {
+      color: "text.white",
+    },
+  });
+
   const userData = JSON.parse(localStorage.getItem("userData"));
   return (
     <Box
@@ -56,14 +65,16 @@ const ChatSideBar = ({
         display: "flex",
         flexDirection: "column",
         boxSizing: "border-box",
+        bgcolor:"background.sidebar"
       }}
     >
-      {/* <Box
+      <Box
         sx={{
           width: "100%",
           bgcolor: "background.lightblue1",
-          p: .5,
+          p: 0.5,
           borderRadius: 2,
+          mb: 1.5,
         }}
       >
         <Tabs
@@ -71,49 +82,129 @@ const ChatSideBar = ({
           onChange={(_, newValue) => setValueTab(newValue)}
           TabIndicatorProps={{ style: { display: "none" } }}
           sx={{
-            minHeight: 35,
-            height: 35,
+            minHeight: 45,
+            height: 40,
+            width: "100%",
             "& .MuiTabs-flexContainer": {
-              gap: .5,
+              gap: 0.5,
+              width: "100%",
+            },
+            "& .MuiTabs-list": {
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+            },
+            "& .MuiTabs-scroller": {
+              display: "flex",
+              mx: 0.5,
             },
           }}
         >
           <Tab
-            icon={<Message size={22} color="#ffffff"/>}
+            icon={
+              <Message
+                size={22}
+                color={
+                  valueTab === 0
+                    ? "#ffffff"
+                    : mode === "dark"
+                    ? "#1cb0f6"
+                    : "#106BA3"
+                }
+              />
+            }
             iconPosition="start"
             label="My Chats"
             sx={tabStyle(valueTab === 0)}
           />
 
           <Tab
-            icon={<TurnedInIcon sx={{color:"primary.main"}}/>}
+            icon={
+              <SaveIcon
+                size={22}
+                color={
+                  valueTab === 1
+                    ? "#ffffff"
+                    : mode === "dark"
+                    ? "#1cb0f6"
+                    : "#106BA3"
+                }
+              />
+            }
             iconPosition="start"
             label="Saved Chats"
             sx={tabStyle(valueTab === 1)}
           />
         </Tabs>
-      </Box> */}
+      </Box>
 
-      <TextField
-        placeholder="Search here..."
-        size="small"
+      <Box
         sx={{
+          display: "flex",
+          gap: 0.5,
+          border: "1",
           mb: 2,
-          "& .MuiOutlinedInput-root": {
-            borderRadius: 100,
-            fontSize: 10,
-          },
+          justifyContent: "space-between",
         }}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon sx={{ fontSize: 18 }} />
-            </InputAdornment>
-          ),
-        }}
-      />
+      >
+        <TextField
+          placeholder="Search here..."
+          size="small"
+          sx={{
+            bgcolor: "background.grey",
+            border: "none",
+            height: 35,
+            width: "85%",
+            borderRadius: 2,
+            "& .MuiOutlinedInput-root": {
+              height: 35,
+              borderRadius: 2,
+              fontSize: 10,
+              border: "none",
+              color: "text.placeholder",
+              "& fieldset": {
+                border: "none",
+              },
+              "&:hover fieldset": {
+                border: "none",
+              },
+              "&.Mui-focused fieldset": {
+                border: "none",
+              },
+            },
+            "& .MuiOutlinedInput-input": {
+              padding: "0 8px",
+            },
+          }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search size={18} color={"#0f1c2e"} />
+                </InputAdornment>
+              ),
+            },
+          }}
+        />
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: 35,
+            width: 35,
+            borderRadius: 2,
+            bgcolor: "background.grey",
+          }}
+        >
+          <FilterIcon
+            size={20}
+            color={mode == "dark" ?  "#1cb0f6":"#106BA3"}
+          />
+        </Box>
+      </Box>
 
-      <Typography variant={"body2"} sx={{ mb: 1, fontWeight: 600 }}>
+      <Typography variant={"body2"} sx={{ mb: 1, color: "text.smallheading" }}>
         Your Chats
       </Typography>
 

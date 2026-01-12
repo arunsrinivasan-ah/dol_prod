@@ -1,53 +1,22 @@
-import {
-  Box,
-  Typography,
-  IconButton,
-  TextareaAutosize,
-} from "@mui/material";
-import React, { useEffect, useState } from "react";
+import { Box, Typography, IconButton, TextareaAutosize } from "@mui/material";
+import React, { useEffect, useRef, useState } from "react";
 import { SendIcon } from "../../assets/svgIcons/sendIcon";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import WelcomeChatScreen from "./WelcomeChatScreen";
 import { ensureSession, sendMessage } from "../../api/fetchApi";
 import ChatMessage from "./ChatMessage";
+import { useThemeMode } from "../../context/ThemeModeContext";
+import { Message } from "../../assets/svgIcons/message";
+import { Saveoutlined } from "../../assets/svgIcons/SaveIconOutlined";
+import DolphinIconW from "../../assets/images/dolphin_w.png";
 
 export const sanitizeMarkdown = (markdownText) => {
   const rawHtml = marked.parse(markdownText || "");
   return DOMPurify.sanitize(rawHtml, { USE_PROFILES: { html: true } });
 };
 
-const ThinkingBubble = () => (
-  <Box
-    sx={{
-      display: "flex",
-      alignItems: "center",
-      gap: 1,
-      // p: 2,
-      borderRadius: 2,
-      width: "fit-content",
-    }}
-  >
-    <Box
-      sx={{
-        width: 36,
-        height: 36,
-        borderRadius: "50%",
-        backgroundColor: "#fff",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      🐬
-    </Box>
-    <Typography variant="body1"
-      sx={{ fontWeight: 500, color: "var(--marine-deep)", backgroundColor: "#fff", p: 2,borderRadius:2 }}
-    >
-      Dolphin is thinking...
-    </Typography>
-  </Box>
-);
+
 
 const ChatWindow = ({
   currentSessionData,
@@ -59,6 +28,80 @@ const ChatWindow = ({
 }) => {
   const [messages, setmessages] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const { mode } = useThemeMode();
+  
+const bottomRef = useRef(null);
+
+const ThinkingBubble = () => (
+  <Box
+    sx={{
+      display: "flex",
+      alignItems: "center",
+      gap: 1,
+      // p: 2,
+      borderRadius: 5,
+      width: "fit-content",
+    }}
+  >
+     <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            width: 50,
+            height: 50,
+            borderRadius: 60,
+            backgroundColor: "primary.main",
+          }}
+        >
+          <Box
+            component="img"
+            src={DolphinIconW}
+            alt="Dolphin"
+            sx={{ width: 30, height: 30 }}
+          />
+        </Box>
+
+    <Typography
+      variant="body1"
+      sx={{
+        fontWeight: 700,
+        color: "var(--marine-deep)",
+        backgroundColor: "#fff",
+        p: 2,
+        borderRadius: 5,
+        "& span": {
+          fontSize: 20,
+          animation: "blink 1.4s infinite both",
+        },
+        "& span:nth-of-type(2)": {
+          animationDelay: "0.2s",
+        },
+        "& span:nth-of-type(3)": {
+          animationDelay: "0.4s",
+        },
+        "@keyframes blink": {
+          "0%": { opacity: 0 },
+          "20%": { opacity: 1 },
+          "100%": { opacity: 0 },
+        },
+      }}
+    >
+      Dolphin is thinking
+      <span>.</span>
+      <span>.</span>
+      <span>.</span>
+    </Typography>
+
+     <div ref={bottomRef} />
+  </Box>
+);
+
+useEffect(() => {
+  bottomRef.current?.scrollIntoView({
+    behavior: "smooth",
+  });
+}, [messages]);
 
   useEffect(() => {
     setmessages(
@@ -68,44 +111,47 @@ const ChatWindow = ({
     );
   }, [currentSessionData]);
 
-  const handleSend = async () => {
-    if (!searchQuery.trim()) return;
+ const handleSend = async (queryOverride) => {
+  const messageText = queryOverride ?? searchQuery;
 
-    const userMessage = {
-      role: "user",
-      content: searchQuery.trim(),
-      timestamp: new Date().toISOString(),
-    };
+  if (!messageText.trim()) return;
 
-    setmessages((prev = []) => [...prev, userMessage]);
-    setSearchQuery("");
-
-    // 🐬 thinking bubble
-    setmessages((prev = []) => [
-      ...prev,
-      { role: "assistant", isThinking: true },
-    ]);
-
-    const sessionId = currentSessionId
-      ? await ensureSession(currentSessionId)
-      : await ensureSession();
-
-    setCurrentSessionId(sessionId);
-
-    const response = await sendMessage(sessionId, userMessage.content);
-
-    setmessages((prev = []) =>
-      prev
-        .filter((m) => !m.isThinking)
-        .concat({
-          ...response,
-          category: response?.metadata?.category,
-          role: "assistant",
-        })
-    );
-
-    await fetchSessions();
+  const userMessage = {
+    role: "user",
+    content: messageText.trim(),
+    timestamp: new Date().toISOString(),
   };
+
+  setmessages((prev = []) => [...prev, userMessage]);
+  setSearchQuery("");
+
+  // 🐬 thinking bubble
+  setmessages((prev = []) => [
+    ...prev,
+    { role: "assistant", isThinking: true },
+  ]);
+
+  const sessionId = currentSessionId
+    ? await ensureSession(currentSessionId)
+    : await ensureSession();
+
+  setCurrentSessionId(sessionId);
+
+  const response = await sendMessage(sessionId, userMessage.content);
+
+  setmessages((prev = []) =>
+    prev
+      .filter((m) => !m.isThinking)
+      .concat({
+        ...response,
+        category: response?.metadata?.category,
+        role: "assistant",
+      })
+  );
+
+  await fetchSessions();
+};
+
 
   const showWelcome =
     (currentSessionData && currentSessionData.messages?.length === 0) ||
@@ -116,11 +162,57 @@ const ChatWindow = ({
     <Box
       sx={{
         width: "80vw",
-        background: '#f4f0ea',
+        backgroundColor: "background.light1",
         display: "flex",
         flexDirection: "column",
       }}
     >
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          px: 7,
+          py: 2,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Message size={22} color={mode === "dark" ? "#1cb0f6" : "#106BA3"} />
+
+          <Typography
+            variant="h3"
+            sx={{
+              color: "text.primary",
+              fontSize: 18,
+            }}
+          >
+            {"New Chat"}
+          </Typography>
+        </Box>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            cursor: "pointer",
+          }}
+        >
+          <Saveoutlined
+            size={22}
+            color={mode === "dark" ? "#1cb0f6" : "#106BA3"}
+          />
+          {/* <SaveIcon size={22} color={mode === "dark" ? "#1cb0f6" : "#106BA3"} /> */}
+          <Typography
+            variant="h3"
+            sx={{
+              color: "text.primary",
+              fontSize: 18,
+            }}
+          >
+            {"Save Chat"}
+          </Typography>
+        </Box>
+      </Box>
+
       {showWelcome ? (
         <WelcomeChatScreen />
       ) : (
@@ -128,7 +220,7 @@ const ChatWindow = ({
           sx={{
             flex: 1,
             overflowY: "auto",
-            p: 8,
+            p: 5,
             display: "flex",
             flexDirection: "column",
             gap: 2,
@@ -148,6 +240,9 @@ const ChatWindow = ({
               <ThinkingBubble key="thinking" />
             ) : (
               <ChatMessage
+              handleSend={handleSend}
+              setSearchQuery={setSearchQuery}
+                sessionId={currentSessionId}
                 msg={msg}
                 videos_suggestions={videos_suggestions}
                 images_suggestions={images_suggestions}
@@ -160,8 +255,10 @@ const ChatWindow = ({
 
       <Box
         sx={{
-          p: 5,
+          px: 7,
+          py: 1,
           display: "flex",
+          flexDirection: "column",
           alignItems: "flex-end",
         }}
       >
@@ -171,50 +268,52 @@ const ChatWindow = ({
             width: "100%",
             display: "flex",
             alignItems: "center",
+
+            "& textarea": {
+              width: "100%",
+              resize: "none",
+              borderRadius: 2,
+              padding: "20px 56px 20px 50px",
+              fontSize: 14,
+              fontFamily: "inherit",
+              maxHeight: 120,
+              overflowY: "auto",
+              boxSizing: "border-box",
+
+              // ✅ theme background
+              backgroundColor: "background.paper",
+              color: "text.primary",
+
+              border: "1px solid",
+              borderColor: "divider",
+              outline: "none",
+
+              scrollbarWidth: "thin",
+              scrollbarColor: "primary.main transparent",
+
+              "&::placeholder": {
+                color: "text.placeholder1",
+                opacity: 1,
+              },
+
+              "&::-webkit-scrollbar": {
+                width: 6,
+              },
+              "&::-webkit-scrollbar-thumb": {
+                backgroundColor: "primary.main",
+                borderRadius: 2,
+              },
+              "&::-webkit-scrollbar-button": {
+                display: "none",
+              },
+            },
           }}
         >
           <TextareaAutosize
             minRows={1}
             maxRows={6}
-            placeholder="Ask about nutrition, calories, fitness..."
-            style={{
-              width: "100%",
-              resize: "none",
-              borderRadius: 10,
-              padding: "20px 56px 20px 15px",
-              fontSize: 14,
-              fontFamily: "inherit",
-              maxHeight: "120px",
-              overflowY: "auto",
-              boxSizing: "border-box",
-              border: "1px solid #c4c4c4",
-              outline: "none",
-
-              scrollbarWidth: "thin",
-              scrollbarColor: "#b0c7d8 transparent",
-
-              "&::-webkit-scrollbar": {
-                width: "6px",
-              },
-
-              "&::-webkit-scrollbar-thumb": {
-                backgroundColor: "#b0c7d8",
-                borderRadius: "10px",
-              },
-
-              "&::-webkit-scrollbar-button:single-button": {
-                display: "none",
-                width: 0,
-                height: 0,
-              },
-
-              "&::-webkit-scrollbar-button:vertical:start:decrement": {
-                display: "none",
-              },
-              "&::-webkit-scrollbar-button:vertical:end:increment": {
-                display: "none",
-              },
-            }}
+            placeholder="Message Dolphin AI"
+            sx={{ color: "text.placeholder1" }}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -225,6 +324,21 @@ const ChatWindow = ({
             }}
           />
 
+          <Box
+            sx={{
+              display: "flex",
+              position: "absolute",
+              transform: "translateY(-50%)",
+              left: 16,
+              top: "50%",
+            }}
+          >
+            <Message
+              size={22}
+              color={mode === "dark" ? "#1cb0f6" : "#106BA3"}
+            />
+          </Box>
+
           <IconButton
             onClick={handleSend}
             sx={{
@@ -234,16 +348,29 @@ const ChatWindow = ({
               transform: "translateY(-50%)",
               height: 36,
               width: 36,
-              bgcolor: "#cbe1f1ff",
               borderRadius: 2,
-              "&:hover": {
-                bgcolor: "#9fc3ddff",
-              },
             }}
           >
-            <SendIcon />
+            <SendIcon
+              size={20}
+              color={mode === "dark" ? "#1989D0" : "#106BA3"}
+            />
           </IconButton>
         </Box>
+        <Typography
+          variant="body2"
+          sx={{
+            fontSize: 10,
+            textAlign: "center",
+            p: 1,
+            color: "text.caption",
+          }}
+        >
+          This AI-generated content is for educational purposes only and may not
+          reflect the most current regulations or company policies. Always
+          verify with official sources and your organization’s safety management
+          system (SMS) before applying in practice.
+        </Typography>
       </Box>
     </Box>
   );

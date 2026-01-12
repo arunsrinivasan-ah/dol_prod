@@ -244,8 +244,8 @@ export default function Login({ onLoginSuccess }) {
 
               <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
                 <Typography
-                  variant="body2"
-                  sx={{ fontWeight: 600, fontSize: "15px", color: "#261046" }}
+                  variant="h1"
+                  sx={{ fontWeight: 600, fontSize: 15, color: "#261046" }}
                 >
                   Password
                 </Typography>
@@ -320,7 +320,7 @@ export default function Login({ onLoginSuccess }) {
               sx={{
                 color: "var(--muted)",
                 textAlign: "center",
-                fontFamily: 13,
+                fontSize: 10,
               }}
             >
               © 2025 Mariner Skills , LLC. All rights reserved
