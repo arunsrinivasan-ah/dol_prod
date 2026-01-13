@@ -16,8 +16,6 @@ export const sanitizeMarkdown = (markdownText) => {
   return DOMPurify.sanitize(rawHtml, { USE_PROFILES: { html: true } });
 };
 
-
-
 const ChatWindow = ({
   currentSessionData,
   currentSessionId,
@@ -25,83 +23,85 @@ const ChatWindow = ({
   activeIndex,
   loading,
   fetchSessions,
+  messages,
+  setmessages,
+  setDisableNewChat,
 }) => {
-  const [messages, setmessages] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const { mode } = useThemeMode();
-  
-const bottomRef = useRef(null);
 
-const ThinkingBubble = () => (
-  <Box
-    sx={{
-      display: "flex",
-      alignItems: "center",
-      gap: 1,
-      // p: 2,
-      borderRadius: 5,
-      width: "fit-content",
-    }}
-  >
-     <Box
-          sx={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            width: 50,
-            height: 50,
-            borderRadius: 60,
-            backgroundColor: "primary.main",
-          }}
-        >
-          <Box
-            component="img"
-            src={DolphinIconW}
-            alt="Dolphin"
-            sx={{ width: 30, height: 30 }}
-          />
-        </Box>
+  const bottomRef = useRef(null);
 
-    <Typography
-      variant="body1"
+  const ThinkingBubble = () => (
+    <Box
       sx={{
-        fontWeight: 700,
-        color: "var(--marine-deep)",
-        backgroundColor: "#fff",
-        p: 2,
+        display: "flex",
+        alignItems: "center",
+        gap: 1,
+        // p: 2,
         borderRadius: 5,
-        "& span": {
-          fontSize: 20,
-          animation: "blink 1.4s infinite both",
-        },
-        "& span:nth-of-type(2)": {
-          animationDelay: "0.2s",
-        },
-        "& span:nth-of-type(3)": {
-          animationDelay: "0.4s",
-        },
-        "@keyframes blink": {
-          "0%": { opacity: 0 },
-          "20%": { opacity: 1 },
-          "100%": { opacity: 0 },
-        },
+        width: "fit-content",
       }}
     >
-      Dolphin is thinking
-      <span>.</span>
-      <span>.</span>
-      <span>.</span>
-    </Typography>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          width: 50,
+          height: 50,
+          borderRadius: 60,
+          backgroundColor: "primary.main",
+        }}
+      >
+        <Box
+          component="img"
+          src={DolphinIconW}
+          alt="Dolphin"
+          sx={{ width: 30, height: 30 }}
+        />
+      </Box>
 
-     <div ref={bottomRef} />
-  </Box>
-);
+      <Typography
+        variant="body1"
+        sx={{
+          fontWeight: 700,
+          backgroundColor: "background.chatbackground",
+          p: 1.5,
+          borderRadius: 5,
+          color: "primary.main",
+          "& span": {
+            fontSize: 20,
+            animation: "blink 1.4s infinite both",
+          },
+          "& span:nth-of-type(2)": {
+            animationDelay: "0.2s",
+          },
+          "& span:nth-of-type(3)": {
+            animationDelay: "0.4s",
+          },
+          "@keyframes blink": {
+            "0%": { opacity: 0 },
+            "20%": { opacity: 1 },
+            "100%": { opacity: 0 },
+          },
+        }}
+      >
+        Dolphin is thinking
+        <span>.</span>
+        <span>.</span>
+        <span>.</span>
+      </Typography>
 
-useEffect(() => {
-  bottomRef.current?.scrollIntoView({
-    behavior: "smooth",
-  });
-}, [messages]);
+      <div ref={bottomRef} />
+    </Box>
+  );
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
+  }, [messages]);
 
   useEffect(() => {
     setmessages(
@@ -111,47 +111,46 @@ useEffect(() => {
     );
   }, [currentSessionData]);
 
- const handleSend = async (queryOverride) => {
-  const messageText = queryOverride ?? searchQuery;
+  const handleSend = async (queryOverride) => {
+    const messageText = queryOverride ?? searchQuery;
 
-  if (!messageText.trim()) return;
+    if (!messageText.trim()) return;
 
-  const userMessage = {
-    role: "user",
-    content: messageText.trim(),
-    timestamp: new Date().toISOString(),
+    const userMessage = {
+      role: "user",
+      content: messageText.trim(),
+      timestamp: new Date().toISOString(),
+    };
+
+    setmessages((prev = []) => [...prev, userMessage]);
+    setSearchQuery("");
+
+    setmessages((prev = []) => [
+      ...prev,
+      { role: "assistant", isThinking: true },
+    ]);
+
+    const sessionId = currentSessionId
+      ? await ensureSession(currentSessionId)
+      : await ensureSession();
+
+    setCurrentSessionId(sessionId);
+
+    setDisableNewChat(true);
+    const response = await sendMessage(sessionId, userMessage.content);
+    setDisableNewChat(false);
+    setmessages((prev = []) =>
+      prev
+        .filter((m) => !m.isThinking)
+        .concat({
+          ...response,
+          category: response?.metadata?.category,
+          role: "assistant",
+        })
+    );
+
+    await fetchSessions();
   };
-
-  setmessages((prev = []) => [...prev, userMessage]);
-  setSearchQuery("");
-
-  // 🐬 thinking bubble
-  setmessages((prev = []) => [
-    ...prev,
-    { role: "assistant", isThinking: true },
-  ]);
-
-  const sessionId = currentSessionId
-    ? await ensureSession(currentSessionId)
-    : await ensureSession();
-
-  setCurrentSessionId(sessionId);
-
-  const response = await sendMessage(sessionId, userMessage.content);
-
-  setmessages((prev = []) =>
-    prev
-      .filter((m) => !m.isThinking)
-      .concat({
-        ...response,
-        category: response?.metadata?.category,
-        role: "assistant",
-      })
-  );
-
-  await fetchSessions();
-};
-
 
   const showWelcome =
     (currentSessionData && currentSessionData.messages?.length === 0) ||
@@ -175,7 +174,9 @@ useEffect(() => {
           py: 2,
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        <Box
+          sx={{ display: "flex", alignItems: "center", gap: 1, width: "80%" }}
+        >
           <Message size={22} color={mode === "dark" ? "#1cb0f6" : "#106BA3"} />
 
           <Typography
@@ -183,9 +184,16 @@ useEffect(() => {
             sx={{
               color: "text.primary",
               fontSize: 18,
+              width: "80%",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
             }}
           >
-            {"New Chat"}
+            {currentSessionData
+              ? currentSessionData?.title?.charAt(0)?.toUpperCase() +
+                currentSessionData?.title?.slice(1)
+              : "New Chat"}
           </Typography>
         </Box>
         <Box
@@ -240,8 +248,8 @@ useEffect(() => {
               <ThinkingBubble key="thinking" />
             ) : (
               <ChatMessage
-              handleSend={handleSend}
-              setSearchQuery={setSearchQuery}
+                handleSend={handleSend}
+                setSearchQuery={setSearchQuery}
                 sessionId={currentSessionId}
                 msg={msg}
                 videos_suggestions={videos_suggestions}

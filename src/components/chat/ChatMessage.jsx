@@ -5,9 +5,12 @@ import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import QuizDisplay from "./QuizDisplay";
 import { sanitizeMarkdown } from "./ChatWindow";
 import DolphinIconW from "../../assets/images/dolphin_w.png";
-import {
-  useThemeMode,
-} from "../../context/ThemeModeContext";
+import { useThemeMode } from "../../context/ThemeModeContext";
+import { VideoIcon } from "../../assets/svgIcons/VideoIcon";
+import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
+import { ImageIcon } from "../../assets/svgIcons/ImageIcon";
+import { DocumentIcon } from "../../assets/svgIcons/DocumentIcon";
+import MediaPreviewModal from "./MediaPreviewModal";
 
 const ChatMessage = ({
   msg,
@@ -23,11 +26,24 @@ const ChatMessage = ({
   const [showAllPdfs, setShowAllPdfs] = useState(false);
   const isUser = msg.role === "user";
   const { mode } = useThemeMode();
+  const [previewMedia, setPreviewMedia] = useState({
+    open: false,
+    type: null,
+    src: null,
+  });
 
-const handleFollowUpQuestion = async (query) => {
-  setSearchQuery(query);     // updates UI (optional)
-  await handleSend(query);   // ✅ always correct
-};
+  const openPreview = (type, src) => {
+    setPreviewMedia({ open: true, type, src });
+  };
+
+  const closePreview = () => {
+    setPreviewMedia({ open: false, type: null, src: null });
+  };
+
+  const handleFollowUpQuestion = async (query) => {
+    setSearchQuery(query);
+    await handleSend(query);
+  };
 
   return (
     <Box
@@ -141,7 +157,7 @@ const handleFollowUpQuestion = async (query) => {
               {msg.content}
             </Typography>
           ) : msg.category !== "QUIZ" ? (
-            <div
+            <div style={{display:"flex",flexDirection:"column"}}
               dangerouslySetInnerHTML={{
                 __html: sanitizeMarkdown(msg.content),
               }}
@@ -152,49 +168,100 @@ const handleFollowUpQuestion = async (query) => {
 
           {videos_suggestions?.length > 0 && (
             <Box sx={{ mt: 2 }}>
-              <Typography variant="h6" sx={{ mb: 1.5, opacity: 0.85 }}>
-                🎬 Video Suggestions
-              </Typography>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.5,
+                }}
+              >
+                <VideoIcon
+                  size={30}
+                  color={mode == "dark" ? "#e8f1fb" : "#0f1c2e"}
+                />
+                <Typography variant="h6" sx={{ color: "text.primary" }}>
+                  Video Suggestions
+                </Typography>
+              </Box>
 
               <Box
                 sx={{
                   display: "flex",
-                  gap: 1,
+                  gap: 2,
                   flexWrap: "wrap",
-                  maxHeight: showAllVideos ? "none" : 220,
+                  maxHeight: showAllVideos ? "none" : 180,
                   overflow: "hidden",
-                  transition: "max-height 0.3s ease",
+                  py: 1,
                 }}
               >
                 {msg.video_suggestions.map((video, i) => (
                   <Box
                     key={i}
-                    component="a"
-                    href={video.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     sx={{
-                      width: 220,
+                      //  overflow: "hidden",
+                      position: "relative",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      width: "23%",
+                      height: 170,
                       textDecoration: "none",
                       borderRadius: 2,
                       p: 0.5,
-                      background: "rgba(255,255,255,0.05)",
+                      backgroundColor: "background.light",
                       transition: "0.2s",
+                      border: "1px solid",
+                      borderColor: "text.caption",
                       "&:hover": {
+                        borderColor: "primary.main",
                         transform: "translateY(-2px)",
-                        border: "1px solid #d8e2ec",
                       },
                     }}
+                    onClick={() => openPreview("video", video.url)}
                   >
                     <Box
                       component="img"
                       src={video.thumbnail}
                       alt={video.title}
-                      sx={{ width: "100%", borderRadius: 1 }}
+                      sx={{
+                        width: "100%",
+                        height: 130,
+                        borderRadius: 1,
+                        objectFit: "cover",
+                      }}
                     />
+                    <Box
+                      sx={{
+                        position: "absolute",
+                        inset: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        left: 10,
+                        bottom: -50,
+                      }}
+                    >
+                      <PlayArrowRoundedIcon
+                        sx={{
+                          color: "background.default",
+                          fontSize: 30,
+                          "&:hover": {
+                            borderColor: "primary.main",
+                            fontSize: 32,
+                          },
+                        }}
+                      />
+                    </Box>
                     <Typography
                       variant="body2"
-                      sx={{ textAlign: "center", mt: 0.5 }}
+                      sx={{
+                        width: "100%",
+                        textAlign: "center",
+                        fontSize: 10,
+                        color: "primary.main",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
                     >
                       {video.title}
                     </Typography>
@@ -202,16 +269,17 @@ const handleFollowUpQuestion = async (query) => {
                 ))}
               </Box>
 
-              {msg.video_suggestions.length > 3 && (
+              {msg.video_suggestions.length > 4 && (
                 <Typography
                   onClick={() => setShowAllVideos((prev) => !prev)}
                   sx={{
                     mt: 1,
+                    fontSize: 13,
                     cursor: "pointer",
                     display: "flex",
                     justifyContent: "center",
                     alignItems: "center",
-                    color: "primary.main",
+                    color: "text.primary",
                   }}
                 >
                   {showAllVideos ? "Show less" : "Show more"}
@@ -225,41 +293,57 @@ const handleFollowUpQuestion = async (query) => {
             </Box>
           )}
 
-          {images_suggestions?.length > 0 && (
+          {/* {images_suggestions?.length > 0 && (
             <Box sx={{ mt: 2 }}>
-              <Typography variant="h6" sx={{ mb: 1.5, opacity: 0.85 }}>
-                🖼️ Reference Images
-              </Typography>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.5,
+                }}
+              >
+                <ImageIcon
+                  size={24}
+                  color={mode == "dark" ? "#e8f1fb" : "#0f1c2e"}
+                />
+                <Typography variant="h6" sx={{ color: "text.primary" }}>
+                  Reference Images
+                </Typography>
+              </Box>
 
               <Box
                 sx={{
                   display: "flex",
-                  gap: 1,
+                  gap: 2,
                   flexWrap: "wrap",
-                  maxHeight: showAllImages ? "none" : 240,
+                  maxHeight: showAllImages ? "none" : 180,
                   overflow: "hidden",
-                  transition: "max-height 0.3s ease",
+                  py: 1,
                 }}
               >
                 {images_suggestions.map((img, i) => (
                   <Box
                     key={i}
-                    component="a"
-                    href={img.Url}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     sx={{
-                      width: 220,
+                      position: "relative",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      width: "23%",
+                      height: 170,
                       textDecoration: "none",
                       borderRadius: 2,
                       p: 0.5,
-                      background: "rgba(255,255,255,0.05)",
+                      backgroundColor: "background.light",
                       transition: "0.2s",
+                      border: "1px solid",
+                      borderColor: "text.caption",
                       "&:hover": {
+                        borderColor: "primary.main",
                         transform: "translateY(-2px)",
-                        border: "1px solid #d8e2ec",
                       },
                     }}
+                      onClick={() => openPreview("image", img.Url)}
                   >
                     <Box
                       component="img"
@@ -267,32 +351,41 @@ const handleFollowUpQuestion = async (query) => {
                       alt={img.Title || "image"}
                       sx={{
                         width: "100%",
+                        height: 130,
                         borderRadius: 1,
                         objectFit: "cover",
                       }}
                     />
-                    {img.Title && (
-                      <Typography
-                        variant="body2"
-                        sx={{ textAlign: "center", mt: 0.5 }}
-                      >
-                        {img.Title}
-                      </Typography>
-                    )}
+
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        width: "100%",
+                        textAlign: "center",
+                        fontSize: 10,
+                        color: "primary.main",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {img.Title || "Reference Image"}
+                    </Typography>
                   </Box>
                 ))}
               </Box>
 
-              {images_suggestions.length > 3 && (
+              {images_suggestions.length > 4 && (
                 <Typography
                   onClick={() => setShowAllImages((prev) => !prev)}
                   sx={{
                     mt: 1,
+                    fontSize: 13,
                     cursor: "pointer",
                     display: "flex",
                     justifyContent: "center",
                     alignItems: "center",
-                    color: "primary.main",
+                    color: "text.primary",
                   }}
                 >
                   {showAllImages ? "Show less" : "Show more"}
@@ -304,77 +397,106 @@ const handleFollowUpQuestion = async (query) => {
                 </Typography>
               )}
             </Box>
-          )}
+          )} */}
 
           {pdf_suggestions?.length > 0 && (
             <Box sx={{ mt: 2 }}>
-              <Typography variant="h6" sx={{ mb: 1.5, opacity: 0.85 }}>
-                📄 Reference PDFs
-              </Typography>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.5,
+                }}
+              >
+                <DocumentIcon
+                  size={25}
+                  color={mode == "dark" ? "#e8f1fb" : "#0f1c2e"}
+                />
+                <Typography variant="h6" sx={{ color: "text.primary" }}>
+                  Reference PDFs
+                </Typography>
+              </Box>
 
               <Box
                 sx={{
                   display: "flex",
-                  gap: 1,
+                  gap: 2,
                   flexWrap: "wrap",
-                  maxHeight: showAllPdfs ? "none" : 200,
+                  maxHeight: showAllPdfs ? "none" : 180,
                   overflow: "hidden",
-                  transition: "max-height 0.3s ease",
+                  py: 1,
                 }}
               >
                 {pdf_suggestions.map((pdf, i) => (
                   <Box
                     key={i}
-                    component="a"
-                    href={pdf.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     sx={{
-                      width: 220,
+                      position: "relative",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      width: "23%",
+                      height: 170,
                       textDecoration: "none",
                       borderRadius: 2,
-                      p: 1,
-                      background: "#f8fafc",
-                      border: "1px solid #e5e7eb",
+                      p: 0.5,
+                      backgroundColor: "background.light",
                       transition: "0.2s",
+                      border: "1px solid",
+                      borderColor: "text.caption",
                       "&:hover": {
+                        borderColor: "primary.main",
                         transform: "translateY(-2px)",
-                        borderColor: "#2f6fed",
                       },
                     }}
+                     onClick={() => openPreview("pdf", pdf.Link)}
                   >
+                    {/* PDF Thumbnail */}
                     <Box
                       sx={{
-                        height: 120,
+                        width: "100%",
+                        height: 130,
+                        borderRadius: 1,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        fontSize: 40,
+                        backgroundColor: "background.paper",
+                        fontSize: 48,
                       }}
                     >
                       📄
                     </Box>
 
+                    {/* Title */}
                     <Typography
                       variant="body2"
-                      sx={{ textAlign: "center", mt: 0.5 }}
+                      sx={{
+                        width: "100%",
+                        textAlign: "center",
+                        fontSize: 10,
+                        color: "primary.main",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
                     >
-                      {pdf.title || "PDF Document"}
+                      {pdf?.Title || "Reference PDF"}
                     </Typography>
                   </Box>
                 ))}
               </Box>
 
-              {pdf_suggestions.length > 3 && (
+              {pdf_suggestions.length > 4 && (
                 <Typography
                   onClick={() => setShowAllPdfs((prev) => !prev)}
                   sx={{
                     mt: 1,
+                    fontSize: 13,
                     cursor: "pointer",
                     display: "flex",
                     justifyContent: "center",
                     alignItems: "center",
-                    color: "primary.main",
+                    color: "text.primary",
                   }}
                 >
                   {showAllPdfs ? "Show less" : "Show more"}
@@ -436,6 +558,12 @@ const handleFollowUpQuestion = async (query) => {
           )}
         </Box>
       </Box>
+      <MediaPreviewModal
+        open={previewMedia.open}
+        type={previewMedia.type}
+        src={previewMedia.src}
+        onClose={closePreview}
+      />
     </Box>
   );
 };

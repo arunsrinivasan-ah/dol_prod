@@ -6,7 +6,7 @@ import { fetchHealth } from "../../api/fetchApi";
 import axios from "axios";
 import Header from "../../components/header/Header";
 
-const Chatpage = ({ userId, setUserId,onLogout }) => {
+const Chatpage = ({ userId, setUserId, onLogout }) => {
   const [sessionData, setSessionData] = useState(null);
   const [activeIndex, setActiveIndex] = useState(null);
 
@@ -15,6 +15,11 @@ const Chatpage = ({ userId, setUserId,onLogout }) => {
 
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionDetailsLoading, setSessionDetailsLoading] = useState(false);
+
+  const [messages, setmessages] = useState([]);
+  const[disableNewChat,setDisableNewChat]=useState(false)
+
+  const [sidebarOpen,setSidebarOpen]=useState(false)
 
   const fetchSessions = async (searchTerm = "") => {
     try {
@@ -64,8 +69,20 @@ const Chatpage = ({ userId, setUserId,onLogout }) => {
 
   return (
     <Grid container height="100vh" width="100vw" flexDirection="column">
-      <Grid item xs={12} sx={{ height: "10vh" }} >
-        <Header onLogout={onLogout}/>
+      <Grid item xs={12} sx={{ height: "10vh" }}>
+        <Header
+          onLogout={onLogout}
+          setSessionData={setSessionData}
+          setCurrentSessionData={setCurrentSessionData}
+          setActiveIndex={setActiveIndex}
+          setCurrentSessionId={setCurrentSessionId}
+          setmessages={setmessages}
+          disableNewChat={disableNewChat}
+          sessionData={sessionData}
+          loading={sessionsLoading}
+          activeIndex={activeIndex}
+          selectSession={selectSession}
+        />
       </Grid>
 
       <Grid item xs={12} sx={{ height: "90vh", display: "flex" }}>
@@ -75,7 +92,6 @@ const Chatpage = ({ userId, setUserId,onLogout }) => {
           activeIndex={activeIndex}
           setActiveIndex={setActiveIndex}
           selectSession={selectSession}
-          
         />
 
         <ChatWindow
@@ -85,6 +101,9 @@ const Chatpage = ({ userId, setUserId,onLogout }) => {
           activeIndex={activeIndex}
           loading={sessionDetailsLoading}
           fetchSessions={fetchSessions}
+          messages={messages}
+          setmessages={setmessages}
+          setDisableNewChat={setDisableNewChat}
         />
       </Grid>
     </Grid>
