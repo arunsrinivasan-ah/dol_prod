@@ -16,7 +16,7 @@ import {
   FormControlLabel,
   Radio,
 } from "@mui/material";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ChatItem } from "./ChatItem";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import { useThemeMode } from "../../context/ThemeModeContext";
@@ -25,7 +25,8 @@ import { Message } from "../../assets/svgIcons/message";
 import { SaveIcon } from "../../assets/svgIcons/Saveicon";
 import { Search } from "../../assets/svgIcons/Search";
 import { FilterIcon } from "../../assets/svgIcons/FilterIcon";
-import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
+import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
+import getTheme from "../../theme";
 
 const ChatSideBar = ({
   sessionData,
@@ -33,12 +34,25 @@ const ChatSideBar = ({
   setActiveIndex,
   selectSession,
   loading,
+  sidebarOpen,
+  setSidebarOpen,
+  fetchSessions,
 }) => {
   const { mode, toggleMode } = useThemeMode();
   const [valueTab, setValueTab] = useState(0);
 
-  const [openFilter,setOpenFilter] = useState(false);
+  const [openFilter, setOpenFilter] = useState(false);
   const [filterValue, setFilterValue] = useState("pinned");
+
+  const [searchTerm, setSearchTerm] = useState("");
+
+  useEffect(() => {
+  const delayDebounce = setTimeout(() => {
+    fetchSessions(searchTerm);
+  }, 400); // debounce delay (ms)
+
+  return () => clearTimeout(delayDebounce);
+}, [searchTerm]);
 
   const tabStyle = (active) => ({
     flex: 1,
@@ -56,7 +70,7 @@ const ChatSideBar = ({
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: .5,
+    gap: 0.5,
 
     "&.Mui-selected": {
       color: "text.white",
@@ -67,12 +81,13 @@ const ChatSideBar = ({
   return (
     <Box
       sx={{
-        width:{xs:"100%", md:"20vw"},
+        width: { xs: "100%", md: "20vw" },
         p: 2,
         display: "flex",
         flexDirection: "column",
         boxSizing: "border-box",
-        bgcolor: "background.sidebar",
+        bgcolor: "background.sidebar", 
+        height: { xs: "100vh", md: "90vh" },
       }}
     >
       <Box
@@ -157,6 +172,7 @@ const ChatSideBar = ({
         <TextField
           placeholder="Search here..."
           size="small"
+          onChange={(e) => setSearchTerm(e.target.value)}
           sx={{
             bgcolor: "background.grey",
             border: "none",
@@ -204,7 +220,8 @@ const ChatSideBar = ({
             bgcolor: "background.grey",
             cursor: "pointer",
           }}
-          onClick={()=>{
+          onClick={() => {
+            setSidebarOpen(false);
             setOpenFilter(true);
           }}
         >
@@ -250,6 +267,7 @@ const ChatSideBar = ({
               onClick={() => {
                 setActiveIndex(index);
                 selectSession(chat.session_id);
+                setSidebarOpen(false);
               }}
             />
           ))
@@ -258,7 +276,7 @@ const ChatSideBar = ({
             variant={"body2"}
             sx={{ fontSize: 12, color: "text.secondary" }}
           >
-            You can start your conversation by asking something with the bot.
+           Your chat history is empty.
           </Typography>
         )}
       </Box>
@@ -268,12 +286,12 @@ const ChatSideBar = ({
         <Box
           sx={{ display: "flex", flexDirection: "column", width: "70%", pl: 1 }}
         >
-          <Typography variant="body1" color="primary.main" fontSize={15}>
+          <Typography variant="body1" color="primary.main" >
             {userData?.name
               ? userData.name.charAt(0).toUpperCase() + userData.name.slice(1)
               : ""}
           </Typography>
-          <Typography variant="body2" color="primary.main" fontSize={10}>
+          <Typography variant="caption" color="primary.main" fontWeight={500}>
             {userData.email}
           </Typography>
         </Box>
@@ -299,26 +317,25 @@ const ChatSideBar = ({
 
       <Dialog
         open={openFilter}
-         sx={{
-    "& .MuiDialog-container": {
-      width:"80vw",
-            height:"90vh",
-             marginTop:"10vh",
-            marginLeft:"20vw",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-  }}
-        onClose={()=>{
-          setOpenFilter(false)
+        sx={{
+          "& .MuiDialog-container": {
+            width: {xs:"100vw",md:"80vw"},
+            height: "90vh",
+            marginTop: "10vh",
+            marginLeft: {xs:0,md:"20vw"},
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          },
+        }}
+        onClose={() => {
+          setOpenFilter(false);
         }}
         BackdropProps={{
-          sx: {
-            width:"80vw",
-            height:"90vh",
-            marginTop:"10vh",
-            marginLeft:"20vw",
+          sx: {width: {xs:"100vw",md:"80vw"}, 
+            height: "90vh",
+            marginTop: "10vh",
+            marginLeft: {xs:0,md:"20vw"},
             backdropFilter: "blur(1px)",
           },
         }}
@@ -326,8 +343,8 @@ const ChatSideBar = ({
           sx: {
             borderRadius: 5,
             width: 360,
-            border:"1.5px solid",
-            borderColor:"primary.main"
+            border: "1.5px solid",
+            borderColor: "primary.main",
             // p: 2,
           },
         }}
@@ -337,7 +354,10 @@ const ChatSideBar = ({
             Filter
           </Typography>
 
-          <RadioGroup value={filterValue} onChange={(e) => setFilterValue(e.target.value)}>
+          <RadioGroup
+            value={filterValue}
+            onChange={(e) => setFilterValue(e.target.value)}
+          >
             <FormControlLabel
               value="pinned"
               control={<Radio />}
@@ -349,7 +369,9 @@ const ChatSideBar = ({
             <Button
               variant="contained"
               startIcon={<CheckRoundedIcon />}
-              onClick={() => {setOpenFilter(false)}}
+              onClick={() => {
+                setOpenFilter(false);
+              }}
               sx={{
                 borderRadius: 2,
                 px: 3,

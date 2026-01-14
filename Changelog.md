@@ -20,6 +20,11 @@ This file tracks all significant updates, improvements, and fixes made to the pr
 -Logout functionality done @Anjali - 12-01-2026
 -When clicked on follow-up question, the question should be sendand answer should to fetched and displayed       @Anjali - 12-01-2026
 
--New Chat functionality @Anjali - 13-02-2026
--
+-New Chat functionality @Anjali - 13-01-2026
+-Search functionality added @Anjali -14-01-2026
+-Mobile responsiveness done @Anjali -14-01-2026
+-Modal for videos,images,pdf @Anjali -14-01-2026
+-Signup page responsiveness and dark theme setup done @Anjali -14-01-2026
+
+-FontSettting done partially @Anjali -14-01-2026
 

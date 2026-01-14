@@ -112,11 +112,13 @@ const WelcomeChatScreen = () => {
 
         {/* Description */}
         <Typography
+        // variant="h6"
           sx={{
+            fontSize:"10px",
+            fontWeight:500,
             width: "90%",
-            fontSize: 13,
             color: "text.smallheading",
-            lineHeight: 1.7,
+            lineHeight: 1.5,
           }}
         >
           You can ask me anything. I can provide summaries, key takeaways and

@@ -95,14 +95,14 @@ const ChatMessage = ({
         {isUser ? (
           <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
             <Typography
-              variant="h3"
+              variant="body1"
               sx={{ fontSize: 16, fontWeight: 700, color: "text.heading1" }}
             >
               You
             </Typography>{" "}
             <Typography
               variant="caption"
-              sx={{ color: "text.caption", fontSize: 14 }}
+              sx={{ color: "text.caption",  }}
             >
               {new Date(msg?.timestamp).toLocaleTimeString("en-US", {
                 hour: "numeric",
@@ -114,26 +114,26 @@ const ChatMessage = ({
         ) : (
           <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
             <Typography
-              variant="h3"
-              sx={{ fontSize: 16, fontWeight: 700, color: "text.heading1" }}
+              variant="body1"
+              sx={{ fontWeight: 700, color: "text.heading1" }}
             >
-              Dolphin
+              Dolphin AI
             </Typography>
-            <Typography
-              variant="h3"
-              sx={{ fontSize: 16, fontWeight: 700, color: "text.heading1" }}
+            {/* <Typography
+              variant="body1"
+              sx={{ fontWeight: 700, color: "text.heading1" }}
             >
               |
             </Typography>
             <Typography
-              variant="h3"
-              sx={{ fontSize: 16, fontWeight: 700, color: "primary.main" }}
+              variant="body1"
+              sx={{fontWeight: 700, color: "primary.main" }}
             >
               AI
-            </Typography>
+            </Typography> */}
             <Typography
               variant="caption"
-              sx={{ color: "text.caption", fontSize: 14 }}
+              sx={{ color: "text.caption", }}
             >
               {new Date(msg?.timestamp).toLocaleTimeString("en-US", {
                 hour: "numeric",
@@ -179,7 +179,7 @@ const ChatMessage = ({
                   size={30}
                   color={mode == "dark" ? "#e8f1fb" : "#0f1c2e"}
                 />
-                <Typography variant="h6" sx={{ color: "text.primary" }}>
+                <Typography variant="h3" sx={{ color: "text.primary" }}>
                   Video Suggestions
                 </Typography>
               </Box>
@@ -252,11 +252,10 @@ const ChatMessage = ({
                       />
                     </Box>
                     <Typography
-                      variant="body2"
+                      variant="caption"
                       sx={{
                         width: "100%",
                         textAlign: "center",
-                        fontSize: 10,
                         color: "primary.main",
                         whiteSpace: "nowrap",
                         overflow: "hidden",
@@ -272,9 +271,9 @@ const ChatMessage = ({
               {msg.video_suggestions.length > 4 && (
                 <Typography
                   onClick={() => setShowAllVideos((prev) => !prev)}
+                  variant="body1"
                   sx={{
                     mt: 1,
-                    fontSize: 13,
                     cursor: "pointer",
                     display: "flex",
                     justifyContent: "center",
@@ -306,7 +305,7 @@ const ChatMessage = ({
                   size={24}
                   color={mode == "dark" ? "#e8f1fb" : "#0f1c2e"}
                 />
-                <Typography variant="h6" sx={{ color: "text.primary" }}>
+                <Typography variant="h3" sx={{ color: "text.primary" }}>
                   Reference Images
                 </Typography>
               </Box>
@@ -358,11 +357,10 @@ const ChatMessage = ({
                     />
 
                     <Typography
-                      variant="body2"
+                      variant="caption"
                       sx={{
                         width: "100%",
                         textAlign: "center",
-                        fontSize: 10,
                         color: "primary.main",
                         whiteSpace: "nowrap",
                         overflow: "hidden",
@@ -378,9 +376,9 @@ const ChatMessage = ({
               {images_suggestions.length > 4 && (
                 <Typography
                   onClick={() => setShowAllImages((prev) => !prev)}
+                  variant="body1"
                   sx={{
                     mt: 1,
-                    fontSize: 13,
                     cursor: "pointer",
                     display: "flex",
                     justifyContent: "center",
@@ -412,7 +410,7 @@ const ChatMessage = ({
                   size={25}
                   color={mode == "dark" ? "#e8f1fb" : "#0f1c2e"}
                 />
-                <Typography variant="h6" sx={{ color: "text.primary" }}>
+                <Typography variant="h3" sx={{ color: "text.primary" }}>
                   Reference PDFs
                 </Typography>
               </Box>
@@ -469,11 +467,10 @@ const ChatMessage = ({
 
                     {/* Title */}
                     <Typography
-                      variant="body2"
+                      variant="caption"
                       sx={{
                         width: "100%",
                         textAlign: "center",
-                        fontSize: 10,
                         color: "primary.main",
                         whiteSpace: "nowrap",
                         overflow: "hidden",
@@ -489,9 +486,9 @@ const ChatMessage = ({
               {pdf_suggestions.length > 4 && (
                 <Typography
                   onClick={() => setShowAllPdfs((prev) => !prev)}
+                  variant="body1"
                   sx={{
                     mt: 1,
-                    fontSize: 13,
                     cursor: "pointer",
                     display: "flex",
                     justifyContent: "center",

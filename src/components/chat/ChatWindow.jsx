@@ -1,4 +1,11 @@
-import { Box, Typography, IconButton, TextareaAutosize } from "@mui/material";
+import {
+  Box,
+  Typography,
+  IconButton,
+  TextareaAutosize,
+  useTheme,
+  useMediaQuery,
+} from "@mui/material";
 import React, { useEffect, useRef, useState } from "react";
 import { SendIcon } from "../../assets/svgIcons/sendIcon";
 import { marked } from "marked";
@@ -157,10 +164,14 @@ const ChatWindow = ({
     messages?.length === 0 ||
     (activeIndex === null && !currentSessionId);
 
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const isTab = useMediaQuery(theme.breakpoints.down("md"));
+
   return (
     <Box
       sx={{
-        width: "80vw",
+        width: { xs: "100vw", md: "80vw" },
         backgroundColor: "background.light1",
         display: "flex",
         flexDirection: "column",
@@ -170,7 +181,7 @@ const ChatWindow = ({
         sx={{
           display: "flex",
           justifyContent: "space-between",
-          px: 7,
+          px: { xs: 4, md: 7 },
           py: 2,
         }}
       >
@@ -180,14 +191,14 @@ const ChatWindow = ({
           <Message size={22} color={mode === "dark" ? "#1cb0f6" : "#106BA3"} />
 
           <Typography
-            variant="h3"
+            variant="h4"
             sx={{
               color: "text.primary",
-              fontSize: 18,
               width: "80%",
               whiteSpace: "nowrap",
               overflow: "hidden",
               textOverflow: "ellipsis",
+              fontWeight:700
             }}
           >
             {currentSessionData
@@ -210,10 +221,9 @@ const ChatWindow = ({
           />
           {/* <SaveIcon size={22} color={mode === "dark" ? "#1cb0f6" : "#106BA3"} /> */}
           <Typography
-            variant="h3"
+            variant="body1"
             sx={{
               color: "text.primary",
-              fontSize: 18,
             }}
           >
             {"Save Chat"}
@@ -348,7 +358,9 @@ const ChatWindow = ({
           </Box>
 
           <IconButton
-            onClick={handleSend}
+            onClick={() => {
+              handleSend();
+            }}
             sx={{
               position: "absolute",
               right: 16,
@@ -366,9 +378,9 @@ const ChatWindow = ({
           </IconButton>
         </Box>
         <Typography
-          variant="body2"
+          variant="caption"
           sx={{
-            fontSize: 10,
+            fontWeight:500,
             textAlign: "center",
             p: 1,
             color: "text.caption",
