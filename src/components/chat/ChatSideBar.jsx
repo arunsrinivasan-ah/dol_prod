@@ -10,7 +10,11 @@ import {
   IconButton,
   Tabs,
   Tab,
-  minor,
+  Dialog,
+  DialogContent,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
 } from "@mui/material";
 import React, { useState } from "react";
 import { ChatItem } from "./ChatItem";
@@ -18,10 +22,10 @@ import LightModeIcon from "@mui/icons-material/LightMode";
 import { useThemeMode } from "../../context/ThemeModeContext";
 import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
 import { Message } from "../../assets/svgIcons/message";
-import TurnedInIcon from "@mui/icons-material/TurnedIn";
 import { SaveIcon } from "../../assets/svgIcons/Saveicon";
 import { Search } from "../../assets/svgIcons/Search";
 import { FilterIcon } from "../../assets/svgIcons/FilterIcon";
+import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 
 const ChatSideBar = ({
   sessionData,
@@ -33,13 +37,16 @@ const ChatSideBar = ({
   const { mode, toggleMode } = useThemeMode();
   const [valueTab, setValueTab] = useState(0);
 
+  const [openFilter,setOpenFilter] = useState(false);
+  const [filterValue, setFilterValue] = useState("pinned");
+
   const tabStyle = (active) => ({
     flex: 1,
     textTransform: "none",
-    px: 0.5,
+    px: 0.3,
     py: 0.5,
     borderRadius: 2,
-    fontSize: 12,
+    fontSize: 11,
     minHeight: 35,
     fontWeight: 500,
     color: active ? "text.white" : "text.primary",
@@ -49,7 +56,7 @@ const ChatSideBar = ({
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: 1,
+    gap: .5,
 
     "&.Mui-selected": {
       color: "text.white",
@@ -60,19 +67,19 @@ const ChatSideBar = ({
   return (
     <Box
       sx={{
-        width: "20vw",
+        width:{xs:"100%", md:"20vw"},
         p: 2,
         display: "flex",
         flexDirection: "column",
         boxSizing: "border-box",
-        bgcolor:"background.sidebar"
+        bgcolor: "background.sidebar",
       }}
     >
       <Box
         sx={{
           width: "100%",
           bgcolor: "background.lightblue1",
-          p: 0.5,
+          p: 0.3,
           borderRadius: 2,
           mb: 1.5,
         }}
@@ -103,7 +110,7 @@ const ChatSideBar = ({
           <Tab
             icon={
               <Message
-                size={22}
+                size={18}
                 color={
                   valueTab === 0
                     ? "#ffffff"
@@ -121,7 +128,7 @@ const ChatSideBar = ({
           <Tab
             icon={
               <SaveIcon
-                size={22}
+                size={16}
                 color={
                   valueTab === 1
                     ? "#ffffff"
@@ -195,11 +202,15 @@ const ChatSideBar = ({
             width: 35,
             borderRadius: 2,
             bgcolor: "background.grey",
+            cursor: "pointer",
+          }}
+          onClick={()=>{
+            setOpenFilter(true);
           }}
         >
           <FilterIcon
             size={20}
-            color={mode == "dark" ?  "#1cb0f6":"#106BA3"}
+            color={mode == "dark" ? "#1cb0f6" : "#106BA3"}
           />
         </Box>
       </Box>
@@ -285,6 +296,72 @@ const ChatSideBar = ({
           )}
         </IconButton>
       </Box>
+
+      <Dialog
+        open={openFilter}
+         sx={{
+    "& .MuiDialog-container": {
+      width:"80vw",
+            height:"90vh",
+             marginTop:"10vh",
+            marginLeft:"20vw",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+  }}
+        onClose={()=>{
+          setOpenFilter(false)
+        }}
+        BackdropProps={{
+          sx: {
+            width:"80vw",
+            height:"90vh",
+            marginTop:"10vh",
+            marginLeft:"20vw",
+            backdropFilter: "blur(1px)",
+          },
+        }}
+        PaperProps={{
+          sx: {
+            borderRadius: 5,
+            width: 360,
+            border:"1.5px solid",
+            borderColor:"primary.main"
+            // p: 2,
+          },
+        }}
+      >
+        <DialogContent>
+          <Typography fontSize={18} fontWeight={600} mb={2}>
+            Filter
+          </Typography>
+
+          <RadioGroup value={filterValue} onChange={(e) => setFilterValue(e.target.value)}>
+            <FormControlLabel
+              value="pinned"
+              control={<Radio />}
+              label="Pinned Chat"
+            />
+          </RadioGroup>
+
+          <Box display="flex" justifyContent="flex-end" mt={3}>
+            <Button
+              variant="contained"
+              startIcon={<CheckRoundedIcon />}
+              onClick={() => {setOpenFilter(false)}}
+              sx={{
+                borderRadius: 2,
+                px: 3,
+                textTransform: "none",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+              }}
+            >
+              Apply
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };

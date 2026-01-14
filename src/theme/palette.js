@@ -8,7 +8,6 @@ export const lightPalette = {
     paper: "#ffffff",
     lightblue1: "#DCF6FF",
     grey: "#E9E9E9",
-
     header: "#AFE0FF",
     sidebar: "#FFFFFF",
     light: "#FFFFFF",
@@ -40,7 +39,6 @@ export const darkPalette = {
     paper: "#062842",
     lightblue1: "#23333E",
     grey: "#E9E9E9",
-
     header: "#031623",
     sidebar: "#031623",
     light: "#23333E",

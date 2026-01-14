@@ -31,7 +31,6 @@ export const ChatItem = ({ title, active, onClick }) => {
         py: 1,
         px: 1,
         borderRadius: 2,
-
         bgcolor: active ? "background.lightblue1" : "transparent",
         "&:hover": {
           bgcolor: "background.lightblue1",
@@ -44,7 +43,7 @@ export const ChatItem = ({ title, active, onClick }) => {
           alignItems: "center",
           justifyContent: "flex-start",
           gap: 1,
-          width: "80%",
+          width: "70%",
           cursor: "pointer",
         }}
         onClick={onClick}
@@ -54,6 +53,7 @@ export const ChatItem = ({ title, active, onClick }) => {
         <Typography
           variant="body2"
           sx={{
+           width: "80%",
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",

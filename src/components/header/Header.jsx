@@ -2,39 +2,69 @@ import {
   AppBar,
   Box,
   Button,
+  IconButton,
   Popover,
   Slider,
   Stack,
   Toolbar,
   Typography,
+  Drawer,
+  useMediaQuery,
 } from "@mui/material";
 import React, { useState } from "react";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
+import MenuIcon from "@mui/icons-material/Menu";
+import TextFieldsIcon from "@mui/icons-material/TextFields";
+
 import DolphinIconB from "../../assets/images/dolphin_b.png";
 import DolphinIconW from "../../assets/images/dolphin_w.png";
 import ShipIconB from "../../assets/images/ship.png";
 import ShipIconW from "../../assets/images/ship_w.png";
-import { useThemeMode } from "../../context/ThemeModeContext";
-import TextFieldsIcon from "@mui/icons-material/TextFields";
 
-const Header = ({ onLogout }) => {
+import { useTheme } from "@mui/material/styles";
+import { useThemeMode } from "../../context/ThemeModeContext";
+
+/** 👉 IMPORT YOUR EXISTING SIDEBAR COMPONENT */
+import ChatSidebar from "../chat/ChatSideBar"; // adjust path if needed
+
+const Header = ({
+  onLogout,
+  setActiveIndex,
+  setCurrentSessionId,
+  setCurrentSessionData,
+  setmessages,
+  disableNewChat,
+   sessionData,
+  activeIndex,
+  selectSession,
+  loading,
+}) => {
+  const theme = useTheme();
   const { mode } = useThemeMode();
+
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const isTablet = useMediaQuery(theme.breakpoints.between("sm", "md"));
+
   const [anchorElFont, setAnchorElFont] = useState(null);
   const [fontSize, setFontSize] = useState(null);
 
+  /** 🔹 DRAWER STATE */
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const openFontMenu = Boolean(anchorElFont);
 
-  const handleOpen = (event) => {
-    setAnchorElFont(event.currentTarget);
+  const handleCreateNewSession = async () => {
+    setCurrentSessionData();
+    setActiveIndex(null);
+    setCurrentSessionId(null);
+    setmessages([]);
   };
 
-  const handleClose = () => {
-    setAnchorElFont(null);
-  };
   return (
     <>
+      {/* ================= HEADER ================= */}
       <AppBar
         position="static"
         elevation={0}
@@ -50,44 +80,63 @@ const Header = ({ onLogout }) => {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            px: 4,
+            px: { xs: 2, sm: 3, md: 4 },
           }}
         >
-          <Box display="flex" alignItems="center" gap={3.5}>
+          {/* ================= LEFT ================= */}
+          <Box
+            display="flex"
+            alignItems="center"
+            gap={{ xs: 1.5, sm: 2, md: 3.5 }}
+          >
+            {(isMobile || isTablet) && (
+              <IconButton onClick={() => setSidebarOpen(true)}>
+                <MenuIcon sx={{ color: "text.primary" }} />
+              </IconButton>
+            )}
+
             <Box
               component="img"
               src={mode === "dark" ? DolphinIconW : DolphinIconB}
               alt="Dolphin"
-              sx={{ width: 60, height: 60 }}
+              sx={{
+                width: { xs: 40, sm: 34, md: 60 },
+                height: { xs: 40, sm: 34, md: 60 },
+              }}
             />
+
             <Box
               component="img"
               src={mode === "dark" ? ShipIconW : ShipIconB}
-              alt="Cap"
-              sx={{ width: 40, height: 40 }}
+              alt="Ship"
+              sx={{
+                width: { xs: 30, sm: 34, md: 40 },
+                height: { xs: 30, sm: 34, md: 40 },
+              }}
             />
 
-            <Box sx={{ display: "flex", gap: 1.5 }}>
-              <Typography
-                variant="h3"
-                sx={{ fontSize: 22, fontWeight: 700, color: "text.heading1" }}
-              >
-                Dolphin
-              </Typography>
-              <Typography
-                variant="h3"
-                sx={{ fontSize: 22, fontWeight: 700, color: "text.heading1" }}
-              >
-                |
-              </Typography>
-              <Typography
-                variant="h3"
-                sx={{ fontSize: 22, fontWeight: 700, color: "primary.main" }}
-              >
-                AI
-              </Typography>
-            </Box>
+            {/* Desktop title (UNCHANGED) */}
+            {!isMobile && !isTablet && (
+              <Box sx={{ display: "flex", gap: 1.5 }}>
+                <Typography
+                  sx={{ fontSize: 22, fontWeight: 700, color: "text.heading1" }}
+                >
+                  Dolphin
+                </Typography>
+                <Typography
+                  sx={{ fontSize: 22, fontWeight: 700, color: "text.heading1" }}
+                >
+                  |
+                </Typography>
+                <Typography
+                  sx={{ fontSize: 22, fontWeight: 700, color: "primary.main" }}
+                >
+                  AI
+                </Typography>
+              </Box>
+            )}
 
+            {/* Connection */}
             <Box display="flex" alignItems="center" gap={1}>
               <Box
                 sx={{
@@ -97,63 +146,105 @@ const Header = ({ onLogout }) => {
                   backgroundColor: "#22c55e",
                 }}
               />
-              <Typography variant="body2" color="text.secondary">
-                Connected
-              </Typography>
+              {!isMobile && (
+                <Typography variant="body2" color="text.secondary">
+                  Connected
+                </Typography>
+              )}
             </Box>
           </Box>
 
-          <Stack direction="row" spacing={2} alignItems="center">
+          {/* ================= RIGHT ================= */}
+          <Stack
+            direction="row"
+            spacing={{ xs: 0.5, sm: 1, md: 2 }}
+            alignItems="center"
+          >
+            {/* New Chat */}
             <Button
+              disabled={disableNewChat}
+              onClick={handleCreateNewSession}
               variant="contained"
-              startIcon={<AddRoundedIcon />}
+              startIcon={!isMobile && <AddRoundedIcon />}
               sx={{
                 backgroundColor: "background.light",
                 color: "text.primary",
                 textTransform: "none",
                 fontWeight: 600,
                 boxShadow: "none",
+                minWidth: isMobile ? 40 : "auto",
+                px: isMobile ? 1 : 2,
                 "&:hover": {
                   backgroundColor: "background.light",
                   boxShadow: "none",
                 },
               }}
             >
-              New Chat
+              {!isMobile && "New Chat"}
+              {isMobile && <AddRoundedIcon />}
             </Button>
 
+            {/* Settings */}
             <Button
               startIcon={
                 <SettingsOutlinedIcon sx={{ color: "text.primary" }} />
               }
-              sx={{ textTransform: "none", color: "text.primary" }}
-              onClick={handleOpen}
+              sx={{
+                textTransform: "none",
+                color: "text.primary",
+                minWidth: isMobile || isTablet ? 40 : "auto",
+                px: isMobile || isTablet ? 1 : 2,
+              }}
             >
-              Settings
+              {!isMobile && !isTablet && "Settings"}
             </Button>
 
+            {/* Logout */}
             <Button
               startIcon={<LogoutOutlinedIcon sx={{ color: "text.primary" }} />}
-              sx={{ textTransform: "none", color: "text.primary" }}
               onClick={onLogout}
+              sx={{
+                textTransform: "none",
+                color: "text.primary",
+                minWidth: isMobile || isTablet ? 40 : "auto",
+                px: isMobile || isTablet ? 1 : 2,
+              }}
             >
-              Logout
+              {!isMobile && !isTablet && "Logout"}
             </Button>
           </Stack>
         </Toolbar>
       </AppBar>
+
+      {/* ================= SIDEBAR DRAWER ================= */}
+      <Drawer
+        anchor="left"
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        ModalProps={{ keepMounted: true }} // better mobile performance
+        PaperProps={{
+          sx: {
+            width: 280,
+            backgroundColor: "background.default",
+            height:"auto",
+          },
+        }}
+      >
+        {/* 🔹 YOUR EXISTING CHAT SIDEBAR COMPONENT */}
+        <ChatSidebar onClose={() => setSidebarOpen(false)} sessionData={sessionData}
+          loading={loading}
+          activeIndex={activeIndex}
+          setActiveIndex={setActiveIndex}
+          selectSession={selectSession}/>
+      </Drawer>
+
+      {/* ================= FONT POPOVER ================= */}
       <Popover
         open={openFontMenu}
         anchorEl={anchorElFont}
-        onClose={handleClose}
-        anchorOrigin={{
-          vertical: "bottom",
-          horizontal: "right",
-        }}
-        transformOrigin={{
-          vertical: "top",
-          horizontal: "right",
-        }}
+        onClose={() => setAnchorElFont(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
         PaperProps={{
           sx: {
             py: 2,
@@ -185,12 +276,10 @@ const Header = ({ onLogout }) => {
             <TextFieldsIcon fontSize="small" />
             <Typography variant="caption">Small</Typography>
           </Stack>
-
           <Stack alignItems="center">
             <TextFieldsIcon />
             <Typography variant="caption">Medium</Typography>
           </Stack>
-
           <Stack alignItems="center">
             <TextFieldsIcon fontSize="large" />
             <Typography variant="caption">Large</Typography>
