@@ -65,7 +65,7 @@ export const ChatItem = ({ title, active, onClick }) => {
       </Box>
 
       <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
-        <Box
+        {/* <Box
           sx={{
             width: 22,
             height: 22,
@@ -80,7 +80,7 @@ export const ChatItem = ({ title, active, onClick }) => {
           }}
         >
           <Pin size={16} color={"#FFAE00"} />
-        </Box>
+        </Box> */}
         <Box
           sx={{
             width: 22,

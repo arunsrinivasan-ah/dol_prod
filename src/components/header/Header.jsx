@@ -29,6 +29,7 @@ import { useThemeMode } from "../../context/ThemeModeContext";
 /** 👉 IMPORT YOUR EXISTING SIDEBAR COMPONENT */
 import ChatSidebar from "../chat/ChatSideBar"; // adjust path if needed
 
+import { useFontSize } from "../../context/FontSizeContext";
 const Header = ({
   onLogout,
   setActiveIndex,
@@ -36,10 +37,13 @@ const Header = ({
   setCurrentSessionData,
   setmessages,
   disableNewChat,
-   sessionData,
+  sessionData,
   activeIndex,
   selectSession,
   loading,
+  sidebarOpen,
+  setSidebarOpen,
+  fetchSessions,
 }) => {
   const theme = useTheme();
   const { mode } = useThemeMode();
@@ -50,8 +54,11 @@ const Header = ({
   const [anchorElFont, setAnchorElFont] = useState(null);
   const [fontSize, setFontSize] = useState(null);
 
+ const { fontLevel, setFontLevel } = useThemeMode();
   /** 🔹 DRAWER STATE */
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const handleOpenFontMenu = (event) => {
+    setAnchorElFont(event.currentTarget);
+  };
 
   const openFontMenu = Boolean(anchorElFont);
 
@@ -119,17 +126,29 @@ const Header = ({
             {!isMobile && !isTablet && (
               <Box sx={{ display: "flex", gap: 1.5 }}>
                 <Typography
-                  sx={{ fontSize: 22, fontWeight: 700, color: "text.heading1" }}
+                  sx={{
+                    // fontSize: 22,
+                    fontWeight: 700,
+                    color: "text.heading1",
+                  }}
                 >
                   Dolphin
                 </Typography>
                 <Typography
-                  sx={{ fontSize: 22, fontWeight: 700, color: "text.heading1" }}
+                  sx={{
+                    // fontSize: 22,
+                    fontWeight: 700,
+                    color: "text.heading1",
+                  }}
                 >
                   |
                 </Typography>
                 <Typography
-                  sx={{ fontSize: 22, fontWeight: 700, color: "primary.main" }}
+                  sx={{
+                    // fontSize: 22,
+                    fontWeight: 700,
+                    color: "primary.main",
+                  }}
                 >
                   AI
                 </Typography>
@@ -189,6 +208,7 @@ const Header = ({
               startIcon={
                 <SettingsOutlinedIcon sx={{ color: "text.primary" }} />
               }
+              onClick={handleOpenFontMenu}
               sx={{
                 textTransform: "none",
                 color: "text.primary",
@@ -226,16 +246,22 @@ const Header = ({
           sx: {
             width: 280,
             backgroundColor: "background.default",
-            height:"auto",
+            height: "100vh",
           },
         }}
       >
         {/* 🔹 YOUR EXISTING CHAT SIDEBAR COMPONENT */}
-        <ChatSidebar onClose={() => setSidebarOpen(false)} sessionData={sessionData}
+        <ChatSidebar
+          onClose={() => setSidebarOpen(false)}
+          sessionData={sessionData}
           loading={loading}
           activeIndex={activeIndex}
           setActiveIndex={setActiveIndex}
-          selectSession={selectSession}/>
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+          selectSession={selectSession}
+          fetchSessions={fetchSessions}
+        />
       </Drawer>
 
       {/* ================= FONT POPOVER ================= */}
@@ -243,8 +269,14 @@ const Header = ({
         open={openFontMenu}
         anchorEl={anchorElFont}
         onClose={() => setAnchorElFont(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        anchorOrigin={{
+          vertical: "bottom",
+          horizontal: "right",
+        }}
+        transformOrigin={{
+          vertical: "top",
+          horizontal: "right",
+        }}
         PaperProps={{
           sx: {
             py: 2,
@@ -264,11 +296,16 @@ const Header = ({
         </Typography>
 
         <Slider
-          value={fontSize}
+          value={fontLevel}
           min={0}
-          max={10}
-          step={5}
-          onChange={(_, value) => setFontSize(value)}
+          max={2}
+          step={1}
+          marks={[
+            { value: 0, label: "Small" },
+            { value: 1, label: "Medium" },
+            { value: 2, label: "Large" },
+          ]}
+          onChange={(_, value) => setFontLevel(value)}
         />
 
         <Stack direction="row" justifyContent="space-between" mt={1}>

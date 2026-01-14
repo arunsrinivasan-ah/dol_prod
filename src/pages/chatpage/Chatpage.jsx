@@ -1,4 +1,4 @@
-import { Grid } from "@mui/material";
+import { Grid, useMediaQuery, useTheme } from "@mui/material";
 import React, { useEffect, useState } from "react";
 import ChatSideBar from "../../components/chat/ChatSideBar";
 import ChatWindow from "../../components/chat/ChatWindow";
@@ -17,9 +17,9 @@ const Chatpage = ({ userId, setUserId, onLogout }) => {
   const [sessionDetailsLoading, setSessionDetailsLoading] = useState(false);
 
   const [messages, setmessages] = useState([]);
-  const[disableNewChat,setDisableNewChat]=useState(false)
+  const [disableNewChat, setDisableNewChat] = useState(false);
 
-  const [sidebarOpen,setSidebarOpen]=useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const fetchSessions = async (searchTerm = "") => {
     try {
@@ -67,6 +67,9 @@ const Chatpage = ({ userId, setUserId, onLogout }) => {
     }
   }, []);
 
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const isTab = useMediaQuery(theme.breakpoints.down("md"));
   return (
     <Grid container height="100vh" width="100vw" flexDirection="column">
       <Grid item xs={12} sx={{ height: "10vh" }}>
@@ -82,17 +85,25 @@ const Chatpage = ({ userId, setUserId, onLogout }) => {
           loading={sessionsLoading}
           activeIndex={activeIndex}
           selectSession={selectSession}
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+          fetchSessions={fetchSessions}
         />
       </Grid>
 
       <Grid item xs={12} sx={{ height: "90vh", display: "flex" }}>
-        <ChatSideBar
-          sessionData={sessionData}
-          loading={sessionsLoading}
-          activeIndex={activeIndex}
-          setActiveIndex={setActiveIndex}
-          selectSession={selectSession}
-        />
+        {!isMobile && !isTab && (
+          <ChatSideBar
+            sessionData={sessionData}
+            loading={sessionsLoading}
+            activeIndex={activeIndex}
+            setActiveIndex={setActiveIndex}
+            selectSession={selectSession}
+            sidebarOpen={sidebarOpen}
+            setSidebarOpen={setSidebarOpen}
+            fetchSessions={fetchSessions}
+          />
+        )}
 
         <ChatWindow
           currentSessionData={currentSessionData}

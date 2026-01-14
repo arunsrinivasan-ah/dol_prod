@@ -110,7 +110,7 @@ export default function Login({ onLoginSuccess }) {
           shipmate –
         </Typography>
 
-        <Typography variant="h6" color="text.main" sx={{ ml: 3 }}>
+        <Typography variant="h3" color="text.main" sx={{ ml: 3 }}>
           Intelligent guidance,
           <br />
           anytime, anywhere
@@ -184,7 +184,7 @@ export default function Login({ onLoginSuccess }) {
                 height: 60,
               }}
             />
-            <Typography variant="h6" fontWeight={700} color="text.main">
+            <Typography variant="h4" fontWeight={700} color="text.main">
               Dolphin | AI
             </Typography>
           </Box>
