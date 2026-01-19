@@ -1,25 +1,32 @@
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useMemo, useState, useEffect } from "react";
 import { ThemeProvider, CssBaseline } from "@mui/material";
 import getTheme from "../theme";
 
-/**
- * Single source of truth for:
- * - light / dark mode
- * - font size level
- */
 const ThemeModeContext = createContext(null);
 
 export const useThemeMode = () => useContext(ThemeModeContext);
 
 export const ThemeModeProvider = ({ children }) => {
-  const [mode, setMode] = useState("light");
+  const [mode, setMode] = useState(() => {
+    return localStorage.getItem("themeMode") || "light";
+  });
 
-  // 0 = small, 1 = medium, 2 = large
-  const [fontLevel, setFontLevel] = useState(0);
+  const [fontLevel, setFontLevel] = useState(() => {
+    const saved = localStorage.getItem("fontLevel");
+    return saved !== null ? Number(saved) : 0;
+  });
 
   const toggleMode = () => {
     setMode((prev) => (prev === "light" ? "dark" : "light"));
   };
+
+  useEffect(() => {
+    localStorage.setItem("themeMode", mode);
+  }, [mode]);
+
+  useEffect(() => {
+    localStorage.setItem("fontLevel", fontLevel);
+  }, [fontLevel]);
 
   const theme = useMemo(
     () => getTheme(mode, fontLevel),

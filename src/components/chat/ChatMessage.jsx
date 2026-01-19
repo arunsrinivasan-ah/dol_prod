@@ -57,8 +57,8 @@ const ChatMessage = ({
       {isUser ? (
         <Avatar
           sx={{
-            width: 50,
-            height: 50,
+            width: { xs: 40, sm: 50 },
+            height: { xs: 40, sm: 50 },
             backgroundColor: "primary.main",
           }}
         />
@@ -68,8 +68,8 @@ const ChatMessage = ({
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            width: 50,
-            height: 50,
+            width: { xs: 40, sm: 50 },
+            height: { xs: 40, sm: 50 },
             borderRadius: 60,
             backgroundColor: "primary.main",
           }}
@@ -78,7 +78,7 @@ const ChatMessage = ({
             component="img"
             src={DolphinIconW}
             alt="Dolphin"
-            sx={{ width: 30, height: 30 }}
+            sx={{ width: { xs: 25, sm: 30 }, height: { xs: 25, sm: 30 } }}
           />
         </Box>
       )}
@@ -95,15 +95,12 @@ const ChatMessage = ({
         {isUser ? (
           <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
             <Typography
-              variant="body1"
-              sx={{ fontSize: 16, fontWeight: 700, color: "text.heading1" }}
+              variant="h4"
+              sx={{ fontWeight: 700, color: "text.heading1" }}
             >
               You
             </Typography>{" "}
-            <Typography
-              variant="caption"
-              sx={{ color: "text.caption",  }}
-            >
+            <Typography variant="caption" sx={{ color: "text.caption" }}>
               {new Date(msg?.timestamp).toLocaleTimeString("en-US", {
                 hour: "numeric",
                 minute: "2-digit",
@@ -131,10 +128,7 @@ const ChatMessage = ({
             >
               AI
             </Typography> */}
-            <Typography
-              variant="caption"
-              sx={{ color: "text.caption", }}
-            >
+            <Typography variant="caption" sx={{ color: "text.caption" }}>
               {new Date(msg?.timestamp).toLocaleTimeString("en-US", {
                 hour: "numeric",
                 minute: "2-digit",
@@ -153,11 +147,12 @@ const ChatMessage = ({
           }}
         >
           {isUser ? (
-            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+            <Typography variant="body1" sx={{ color: "text.secondary" }}>
               {msg.content}
             </Typography>
           ) : msg.category !== "QUIZ" ? (
-            <div style={{display:"flex",flexDirection:"column"}}
+            <div
+              style={{ display: "flex", flexDirection: "column" }}
               dangerouslySetInnerHTML={{
                 __html: sanitizeMarkdown(msg.content),
               }}
@@ -177,7 +172,7 @@ const ChatMessage = ({
               >
                 <VideoIcon
                   size={30}
-                  color={mode == "dark" ? "#e8f1fb" : "#0f1c2e"}
+                  color={mode === "dark" ? "#e8f1fb" : "#0f1c2e"}
                 />
                 <Typography variant="h3" sx={{ color: "text.primary" }}>
                   Video Suggestions
@@ -189,7 +184,7 @@ const ChatMessage = ({
                   display: "flex",
                   gap: 2,
                   flexWrap: "wrap",
-                  maxHeight: showAllVideos ? "none" : 180,
+                  maxHeight: showAllVideos ? "none" : { xs: 150, sm: 180 },
                   overflow: "hidden",
                   py: 1,
                 }}
@@ -203,8 +198,8 @@ const ChatMessage = ({
                       display: "flex",
                       flexDirection: "column",
                       justifyContent: "space-between",
-                      width: "23%",
-                      height: 170,
+                      width: { xs: "43%", sm: "23%" },
+                      height: { xs: 140, sm: 170 },
                       textDecoration: "none",
                       borderRadius: 2,
                       p: 0.5,
@@ -225,7 +220,7 @@ const ChatMessage = ({
                       alt={video.title}
                       sx={{
                         width: "100%",
-                        height: 130,
+                        height: { xs: 80, sm: 130 },
                         borderRadius: 1,
                         objectFit: "cover",
                       }}
@@ -315,7 +310,7 @@ const ChatMessage = ({
                   display: "flex",
                   gap: 2,
                   flexWrap: "wrap",
-                  maxHeight: showAllImages ? "none" : 180,
+                  maxHeight: showAllVideos ? "none" : { xs: 150, sm: 180 },
                   overflow: "hidden",
                   py: 1,
                 }}
@@ -328,8 +323,8 @@ const ChatMessage = ({
                       display: "flex",
                       flexDirection: "column",
                       justifyContent: "space-between",
-                      width: "23%",
-                      height: 170,
+                     width: { xs: "43%", sm: "23%" },
+                      height: { xs: 140, sm: 170 },
                       textDecoration: "none",
                       borderRadius: 2,
                       p: 0.5,
@@ -420,7 +415,7 @@ const ChatMessage = ({
                   display: "flex",
                   gap: 2,
                   flexWrap: "wrap",
-                  maxHeight: showAllPdfs ? "none" : 180,
+                  maxHeight: showAllVideos ? "none" : { xs: 150, sm: 180 },
                   overflow: "hidden",
                   py: 1,
                 }}
@@ -433,8 +428,8 @@ const ChatMessage = ({
                       display: "flex",
                       flexDirection: "column",
                       justifyContent: "space-between",
-                      width: "23%",
-                      height: 170,
+                     width: { xs: "43%", sm: "23%" },
+                      height: { xs: 140, sm: 170 },
                       textDecoration: "none",
                       borderRadius: 2,
                       p: 0.5,
@@ -447,7 +442,7 @@ const ChatMessage = ({
                         transform: "translateY(-2px)",
                       },
                     }}
-                     onClick={() => openPreview("pdf", pdf.Link)}
+                    onClick={() => openPreview("pdf", pdf.Link)}
                   >
                     {/* PDF Thumbnail */}
                     <Box
@@ -459,7 +454,6 @@ const ChatMessage = ({
                         alignItems: "center",
                         justifyContent: "center",
                         backgroundColor: "background.paper",
-                        fontSize: 48,
                       }}
                     >
                       📄

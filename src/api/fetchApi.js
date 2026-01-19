@@ -62,6 +62,16 @@ export const sendMessage = async (sessionId, messageText) => {
     
 
     const data = response.data;
+
+     try {
+      const response = await axios.get("/sessions", {
+        params:  {},
+        withCredentials: true,
+      });
+
+    } catch (error) {
+      console.error("Unable to fetch sessions");
+    }
     // const nodeResponse = data.node_response || data;
 
     // const botMessage = nodeResponse.content || "I did not receive a response.";

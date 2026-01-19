@@ -26,6 +26,7 @@ export const lightPalette = {
     heading2: "#106BA3",
     caption: "#a1abad",
     grey1: "#475569",
+    menu:"#464646",
   },
 };
 
@@ -57,5 +58,6 @@ export const darkPalette = {
     heading2: "#1989D0",
     caption: "#E9E9E9",
     grey1: "#475569",
+    menu:"#ffffff",
   },
 };

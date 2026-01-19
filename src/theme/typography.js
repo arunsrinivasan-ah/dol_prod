@@ -33,7 +33,19 @@ const typography = (fontLevel = 0) => ({
   },
   h6: {
     fontWeight: 500,
-    fontSize: getFontSize(13, fontLevel),
+    fontSize: getFontSize(12, fontLevel),
+  },
+
+  signupPageh1: {
+    fontWeight: 700,
+    fontSize: getFontSize(42, fontLevel),
+    lineHeight: 1.4,
+  },
+
+  signupPageh2: {
+    fontWeight: 500,
+    fontSize: getFontSize(30, fontLevel),
+    lineHeight: 1.1,
   },
 
   button: {

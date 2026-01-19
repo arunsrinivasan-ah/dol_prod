@@ -7,6 +7,7 @@ import {
   Typography,
   Link,
   InputAdornment,
+  useTheme,
 } from "@mui/material";
 import { useState } from "react";
 import { loginApi } from "../api/apiAuth";
@@ -25,7 +26,8 @@ export default function Login({ onLoginSuccess }) {
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState({});
 
-   const { mode } = useThemeMode();
+  const { mode } = useThemeMode();
+  const theme = useTheme();
 
   const validate = () => {
     const newErrors = {};
@@ -50,12 +52,12 @@ export default function Login({ onLoginSuccess }) {
       const userId = await loginApi(email, password);
       onLoginSuccess(userId);
     } catch (error) {
-       const message =
-    error?.response?.data?.message ||
-    error?.message ||
-    "Something went wrong";
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Something went wrong";
 
-  setErrors({ form: message });
+      setErrors({ form: message });
       setErrors({ form: error.message });
     }
   };
@@ -87,30 +89,34 @@ export default function Login({ onLoginSuccess }) {
         >
           <Box
             component="img"
-            src={mode=="dark" ? DolphinWhite:dolphinBlack}
+            src={mode == "dark" ? DolphinWhite : dolphinBlack}
             alt="dolphin"
             sx={{
               width: 80,
               height: 80,
             }}
           />
-          <Typography variant="h4" fontWeight={700} color="text.main">
+          <Typography variant="h1" fontWeight={700} color="text.main">
             Dolphin | AI
           </Typography>
         </Box>
 
         <Typography
-          variant="h3"
+          variant="signupPageh1"
           fontWeight={800}
           color="text.main"
-          sx={{ ml: 3 }}
+          sx={{ ml: 3, lineHeight: "45px" }}
         >
           Your digital
           <br />
           shipmate –
         </Typography>
 
-        <Typography variant="h3" color="text.main" sx={{ ml: 3 }}>
+        <Typography
+          variant="signupPageh2"
+          color="text.main"
+          sx={{ ml: 3, fontWeight: 500, lineHeight: "45px" }}
+        >
           Intelligent guidance,
           <br />
           anytime, anywhere
@@ -206,7 +212,7 @@ export default function Login({ onLoginSuccess }) {
             pb: 1,
             borderRadius: 4,
             border: "1.5px solid",
-            borderColor:"primary.main",
+            borderColor: "primary.main",
             position: "relative",
             zIndex: 2,
             mb: { xs: 8, md: "15%" },
@@ -233,15 +239,14 @@ export default function Login({ onLoginSuccess }) {
             variant="h5"
             fontWeight={700}
             mb={1}
-            sx={{ color:"text.main" }}
-           
+            sx={{ color: "text.main" }}
           >
             SIGN IN
           </Typography>
 
           <Typography
             variant="body2"
-            sx={{color:"text.smallheading"}}
+            sx={{ color: "text.smallheading" }}
             mb={{ sx: 1, md: 1.5 }}
             fontWeight={500}
           >
@@ -257,8 +262,11 @@ export default function Login({ onLoginSuccess }) {
             <Stack spacing={{ xs: 1, sm: 1.5 }}>
               <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
                 <Typography
-                  variant="body2"
-                  sx={{ fontWeight: 600, fontSize: "15px", color: "text.heading1" }}
+                  variant="body1"
+                  sx={{
+                    fontWeight: 600,
+                    color: "text.heading1",
+                  }}
                 >
                   Email
                 </Typography>
@@ -271,14 +279,18 @@ export default function Login({ onLoginSuccess }) {
                   error={!!errors.email}
                   helperText={errors.email}
                   sx={{
-                    height: { xs: 35, sm: 45 },color: "text.placeholder1",
-                    "& .MuiInputBase-root": { height: { xs: 35, sm: 45 },color: "text.placeholder1" },
+                    height: { xs: 35, sm: 45 },
+                    color: "text.placeholder1",
+                    "& .MuiInputBase-root": {
+                      height: { xs: 35, sm: 45 },
+                      color: "text.placeholder1",
+                    },
                     "& input": {
                       padding: "0px 0px",
                       fontSize: 14,
                       height: { xs: 35, sm: 45 },
                       bgcolor: "none",
-                      color: "text.placeholder1"
+                      color: "text.placeholder1",
                     },
                   }}
                   slotProps={{
@@ -286,7 +298,7 @@ export default function Login({ onLoginSuccess }) {
                       startAdornment: (
                         <InputAdornment position="start">
                           <LocalPostOfficeIcon
-                            sx={{ color:  "text.placeholder1" }}
+                            sx={{ color: "text.placeholder1" }}
                           />
                         </InputAdornment>
                       ),
@@ -297,8 +309,8 @@ export default function Login({ onLoginSuccess }) {
 
               <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
                 <Typography
-                  variant="h1"
-                  sx={{ fontWeight: 600, fontSize: 15, color: "text.heading1" }}
+                  variant="body1"
+                  sx={{ fontWeight: 600, color: "text.heading1" }}
                 >
                   Password
                 </Typography>
@@ -313,12 +325,14 @@ export default function Login({ onLoginSuccess }) {
                   sx={{
                     height: { xs: 35, sm: 45 },
                     color: "text.placeholder1",
-                    "& .MuiInputBase-root": { height: { xs: 35, sm: 45,color: "text.placeholder1" } },
+                    "& .MuiInputBase-root": {
+                      height: { xs: 35, sm: 45, color: "text.placeholder1" },
+                    },
                     "& input": {
                       padding: "0px 0px",
                       fontSize: 14,
                       height: { xs: 35, sm: 45 },
-                      color: "text.placeholder1"
+                      color: "text.placeholder1",
                     },
                   }}
                   slotProps={{
@@ -336,8 +350,8 @@ export default function Login({ onLoginSuccess }) {
 
             <Box textAlign="right" my={1}>
               <Typography
-                sx={{ fontSize: 12, fontWeight: 600,color:"primary.main" }}
-                
+                variant="h6"
+                sx={{ fontWeight: 600, color: "primary.main" }}
               >
                 Forgot Password ?
               </Typography>
@@ -353,13 +367,13 @@ export default function Login({ onLoginSuccess }) {
               type="submit"
               variant="contained"
               fullWidth
+              size="small"
               sx={{
                 bgcolor: "text.main",
                 py: 0.5,
                 borderRadius: 2,
                 mb: 1,
-                fontSize: 12,
-                color:"text.white"
+                color: "text.white",
               }}
             >
               SIGN IN
@@ -380,7 +394,6 @@ export default function Login({ onLoginSuccess }) {
               sx={{
                 color: "text.smallheading",
                 textAlign: "center",
-                fontSize: 10,
               }}
             >
               © 2025 Mariner Skills , LLC. All rights reserved

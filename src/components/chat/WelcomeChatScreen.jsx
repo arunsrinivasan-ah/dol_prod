@@ -5,9 +5,14 @@ import DolphinIconW from "../../assets/images/dolphin_w.png";
 import ShipIconB from "../../assets/images/ship.png";
 import ShipIconW from "../../assets/images/ship_w.png";
 import { useThemeMode } from "../../context/ThemeModeContext";
+import {
+  getWelcomeMaxWidth,
+  getDescriptionWidth,
+  getDescriptionGap,
+} from "../../theme/layoutScale";
 
 const WelcomeChatScreen = () => {
-  const { mode } = useThemeMode();
+  const { mode, fontLevel } = useThemeMode();
   return (
     <Box
       sx={{
@@ -21,14 +26,15 @@ const WelcomeChatScreen = () => {
         sx={{
           backgroundColor: "background.paper",
           borderRadius: 8,
-          px: 5,
-          py: 3,
-          maxWidth: 500,
+          px: { xs: 1,sm:4, md: 5 },
+          py: { xs: 1, sm:3,md: 3 },
+          // minWidth:500,
+          maxWidth: { xs: "90%", sm:"60%", md: getWelcomeMaxWidth(500, fontLevel) },
           textAlign: "center",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 2,
+          gap: getDescriptionGap(fontLevel),
           border: "1px solid",
           borderColor: "primary.main",
         }}
@@ -67,19 +73,19 @@ const WelcomeChatScreen = () => {
         >
           <Typography
             variant="h3"
-            sx={{ fontSize: 20, fontWeight: 700, color: "text.heading1" }}
+            sx={{ fontWeight: 700, color: "text.heading1" }}
           >
             Dolphin
           </Typography>
           <Typography
             variant="h3"
-            sx={{ fontSize: 20, fontWeight: 700, color: "text.heading1" }}
+            sx={{ fontWeight: 700, color: "text.heading1" }}
           >
             |
           </Typography>
           <Typography
             variant="h3"
-            sx={{ fontSize: 20, fontWeight: 700, color: "primary.main" }}
+            sx={{ fontWeight: 700, color: "primary.main" }}
           >
             AI
           </Typography>
@@ -87,8 +93,8 @@ const WelcomeChatScreen = () => {
 
         {/* Subtitle */}
         <Typography
+          variant="signupPageh2"
           sx={{
-            fontSize: 30,
             fontWeight: 400,
             color: "text.heading1",
           }}
@@ -112,13 +118,12 @@ const WelcomeChatScreen = () => {
 
         {/* Description */}
         <Typography
-        // variant="h6"
+          variant="h6"
           sx={{
-            fontSize:"10px",
-            fontWeight:500,
-            width: "90%",
+            fontWeight: 500,
+            width: { xs: "96%", md: getDescriptionWidth(fontLevel) },
             color: "text.smallheading",
-            lineHeight: 1.5,
+            lineHeight: 1.4,
           }}
         >
           You can ask me anything. I can provide summaries, key takeaways and
