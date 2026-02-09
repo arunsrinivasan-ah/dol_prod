@@ -17,6 +17,7 @@ import { useThemeMode } from "../../context/ThemeModeContext";
 import { Message } from "../../assets/svgIcons/message";
 import { Saveoutlined } from "../../assets/svgIcons/SaveIconOutlined";
 import DolphinIconW from "../../assets/images/dolphin_w.png";
+import { getContentWidth } from "../../theme/layoutScale";
 
 export const sanitizeMarkdown = (markdownText) => {
   const rawHtml = marked.parse(markdownText || "");
@@ -141,6 +142,7 @@ const ChatWindow = ({
       ? await ensureSession(currentSessionId)
       : await ensureSession();
 
+
     setCurrentSessionId(sessionId);
 
     setDisableNewChat(true);
@@ -156,7 +158,6 @@ const ChatWindow = ({
         })
     );
 
-    await fetchSessions();
   };
 
   const showWelcome =
@@ -167,11 +168,11 @@ const ChatWindow = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isTab = useMediaQuery(theme.breakpoints.down("md"));
-
+  const { fontLevel } = useThemeMode();
   return (
     <Box
       sx={{
-        width: { xs: "100vw", md: "80vw" },
+        width: { xs: "100vw", md: getContentWidth(fontLevel) },
         backgroundColor: "background.light1",
         display: "flex",
         flexDirection: "column",
@@ -181,12 +182,17 @@ const ChatWindow = ({
         sx={{
           display: "flex",
           justifyContent: "space-between",
-          px: { xs: 4, md: 7 },
-          py: 2,
+          px: { xs: 1.5, sm:4, md: 7 },
+          py: { xs: 1, md: 2 },
         }}
       >
         <Box
-          sx={{ display: "flex", alignItems: "center", gap: 1, width: "80%" }}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            width: { xs: "50%", md: "80%" },
+          }}
         >
           <Message size={22} color={mode === "dark" ? "#1cb0f6" : "#106BA3"} />
 
@@ -198,7 +204,7 @@ const ChatWindow = ({
               whiteSpace: "nowrap",
               overflow: "hidden",
               textOverflow: "ellipsis",
-              fontWeight:700
+              fontWeight: 700,
             }}
           >
             {currentSessionData
@@ -238,7 +244,9 @@ const ChatWindow = ({
           sx={{
             flex: 1,
             overflowY: "auto",
-            p: 5,
+            pt: 1,
+            pb: 2,
+            px: {xs:1,md:5},
             display: "flex",
             flexDirection: "column",
             gap: 2,
@@ -273,7 +281,7 @@ const ChatWindow = ({
 
       <Box
         sx={{
-          px: 7,
+          px:{ xs:1,sm:4,md:7},
           py: 1,
           display: "flex",
           flexDirection: "column",
@@ -380,7 +388,7 @@ const ChatWindow = ({
         <Typography
           variant="caption"
           sx={{
-            fontWeight:500,
+            fontWeight: 500,
             textAlign: "center",
             p: 1,
             color: "text.caption",

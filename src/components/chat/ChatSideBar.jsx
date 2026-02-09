@@ -27,6 +27,7 @@ import { Search } from "../../assets/svgIcons/Search";
 import { FilterIcon } from "../../assets/svgIcons/FilterIcon";
 import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import getTheme from "../../theme";
+import { getSidebarWidth } from "../../theme/layoutScale";
 
 const ChatSideBar = ({
   sessionData,
@@ -47,20 +48,20 @@ const ChatSideBar = ({
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
-  const delayDebounce = setTimeout(() => {
-    fetchSessions(searchTerm);
-  }, 400); // debounce delay (ms)
+    const delayDebounce = setTimeout(() => {
+      fetchSessions(searchTerm);
+    }, 400); // debounce delay (ms)
 
-  return () => clearTimeout(delayDebounce);
-}, [searchTerm]);
+    return () => clearTimeout(delayDebounce);
+  }, [searchTerm]);
 
   const tabStyle = (active) => ({
-    flex: 1,
-    textTransform: "none",
-    px: 0.3,
+    flex: "0 0 auto", // 👈 do NOT grow
+    width: "auto",
+    // textTransform: "none",
+    px: 0.6,
     py: 0.5,
     borderRadius: 2,
-    fontSize: 11,
     minHeight: 35,
     fontWeight: 500,
     color: active ? "text.white" : "text.primary",
@@ -78,15 +79,17 @@ const ChatSideBar = ({
   });
 
   const userData = JSON.parse(localStorage.getItem("userData"));
+
+  const { fontLevel } = useThemeMode();
   return (
     <Box
       sx={{
-        width: { xs: "100%", md: "20vw" },
+        width: { xs: "100%", md: getSidebarWidth(fontLevel) },
         p: 2,
         display: "flex",
         flexDirection: "column",
         boxSizing: "border-box",
-        bgcolor: "background.sidebar", 
+        bgcolor: "background.sidebar",
         height: { xs: "100vh", md: "90vh" },
       }}
     >
@@ -113,7 +116,7 @@ const ChatSideBar = ({
             },
             "& .MuiTabs-list": {
               display: "flex",
-              justifyContent: "center",
+              justifyContent: "space-around",
               alignItems: "center",
             },
             "& .MuiTabs-scroller": {
@@ -143,7 +146,7 @@ const ChatSideBar = ({
           <Tab
             icon={
               <SaveIcon
-                size={16}
+                size={18}
                 color={
                   valueTab === 1
                     ? "#ffffff"
@@ -276,7 +279,7 @@ const ChatSideBar = ({
             variant={"body2"}
             sx={{ fontSize: 12, color: "text.secondary" }}
           >
-           Your chat history is empty.
+            Your chat history is empty.
           </Typography>
         )}
       </Box>
@@ -286,7 +289,7 @@ const ChatSideBar = ({
         <Box
           sx={{ display: "flex", flexDirection: "column", width: "70%", pl: 1 }}
         >
-          <Typography variant="body1" color="primary.main" >
+          <Typography variant="body1" color="primary.main">
             {userData?.name
               ? userData.name.charAt(0).toUpperCase() + userData.name.slice(1)
               : ""}
@@ -296,7 +299,7 @@ const ChatSideBar = ({
           </Typography>
         </Box>
         <IconButton
-          onClick={toggleMode}
+          // onClick={toggleMode}
           sx={{
             width: 35,
             height: 35,
@@ -319,10 +322,10 @@ const ChatSideBar = ({
         open={openFilter}
         sx={{
           "& .MuiDialog-container": {
-            width: {xs:"100vw",md:"80vw"},
+            width: { xs: "100vw", md: "80vw" },
             height: "90vh",
             marginTop: "10vh",
-            marginLeft: {xs:0,md:"20vw"},
+            marginLeft: { xs: 0, md: "20vw" },
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -332,10 +335,11 @@ const ChatSideBar = ({
           setOpenFilter(false);
         }}
         BackdropProps={{
-          sx: {width: {xs:"100vw",md:"80vw"}, 
+          sx: {
+            width: { xs: "100vw", md: "80vw" },
             height: "90vh",
             marginTop: "10vh",
-            marginLeft: {xs:0,md:"20vw"},
+            marginLeft: { xs: 0, md: "20vw" },
             backdropFilter: "blur(1px)",
           },
         }}

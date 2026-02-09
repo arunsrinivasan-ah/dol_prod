@@ -3,17 +3,26 @@ import typography from "./typography";
 import { lightPalette, darkPalette } from "./palette";
 import componentOverrides from "./component";
 
-const getTheme = (mode, fontLevel = 0) =>
-  createTheme({
+const getTheme = (mode, fontLevel = 0) =>{
+ return createTheme({
     palette: mode === "dark" ? darkPalette : lightPalette,
 
     typography: typography(fontLevel),
 
-    components: {
-      // 🔹 Your scalable components (Button, etc.)
-      ...componentOverrides(fontLevel),
 
-      // 🔹 CssBaseline scrollbar styles
+    components: {
+      ...componentOverrides(fontLevel),
+      MuiTab: {
+        styleOverrides: {
+          root: ({ theme }) => ({
+            ...theme.typography.body2, // 👈 uses getFontSize
+            minHeight: 40,
+            textTransform: "none",
+            fontWeight: 500,
+          }),
+        },
+      },
+      //  CssBaseline scrollbar styles
       MuiCssBaseline: {
         styleOverrides: (theme) => ({
           /* ===== WebKit Browsers ===== */
@@ -45,5 +54,6 @@ const getTheme = (mode, fontLevel = 0) =>
       },
     },
   });
-
+}
+  
 export default getTheme;

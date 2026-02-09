@@ -9,7 +9,7 @@ const components = (fontLevel = 0) => ({
       },
       sizeMedium: {
         fontSize: getFontSize(14, fontLevel),
-        padding: "6px 16px",
+        padding: "6px 10px",
       },
       sizeLarge: {
         fontSize: getFontSize(16, fontLevel),

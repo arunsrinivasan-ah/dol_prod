@@ -10,6 +10,7 @@ import {
   Typography,
   Drawer,
   useMediaQuery,
+  Divider,
 } from "@mui/material";
 import React, { useState } from "react";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
@@ -26,10 +27,11 @@ import ShipIconW from "../../assets/images/ship_w.png";
 import { useTheme } from "@mui/material/styles";
 import { useThemeMode } from "../../context/ThemeModeContext";
 
-/** 👉 IMPORT YOUR EXISTING SIDEBAR COMPONENT */
-import ChatSidebar from "../chat/ChatSideBar"; // adjust path if needed
+import DarkModeIcon from "@mui/icons-material/DarkMode";
 
-import { useFontSize } from "../../context/FontSizeContext";
+import LightModeIcon from "@mui/icons-material/LightMode";
+import ChatSidebar from "../chat/ChatSideBar";
+
 const Header = ({
   onLogout,
   setActiveIndex,
@@ -46,16 +48,15 @@ const Header = ({
   fetchSessions,
 }) => {
   const theme = useTheme();
-  const { mode } = useThemeMode();
+   const { mode, toggleMode } = useThemeMode();
 
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isTablet = useMediaQuery(theme.breakpoints.between("sm", "md"));
 
   const [anchorElFont, setAnchorElFont] = useState(null);
-  const [fontSize, setFontSize] = useState(null);
 
- const { fontLevel, setFontLevel } = useThemeMode();
-  /** 🔹 DRAWER STATE */
+  const { fontLevel, setFontLevel } = useThemeMode();
+
   const handleOpenFontMenu = (event) => {
     setAnchorElFont(event.currentTarget);
   };
@@ -87,7 +88,7 @@ const Header = ({
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            px: { xs: 2, sm: 3, md: 4 },
+            px: { xs: 1, sm: 3, md: 4 },
           }}
         >
           {/* ================= LEFT ================= */}
@@ -126,6 +127,7 @@ const Header = ({
             {!isMobile && !isTablet && (
               <Box sx={{ display: "flex", gap: 1.5 }}>
                 <Typography
+                  variant="h2"
                   sx={{
                     // fontSize: 22,
                     fontWeight: 700,
@@ -135,6 +137,7 @@ const Header = ({
                   Dolphin
                 </Typography>
                 <Typography
+                  variant="h2"
                   sx={{
                     // fontSize: 22,
                     fontWeight: 700,
@@ -144,6 +147,7 @@ const Header = ({
                   |
                 </Typography>
                 <Typography
+                  variant="h2"
                   sx={{
                     // fontSize: 22,
                     fontWeight: 700,
@@ -281,7 +285,7 @@ const Header = ({
           sx: {
             py: 2,
             px: 5,
-            width: 340,
+            width: 400,
             borderRadius: 5,
             mt: 3,
             boxShadow: "none",
@@ -291,7 +295,7 @@ const Header = ({
           },
         }}
       >
-        <Typography fontWeight={600} mb={1}>
+        <Typography variant="h4" fontWeight={600} mb={1}>
           Font
         </Typography>
 
@@ -321,6 +325,47 @@ const Header = ({
             <TextFieldsIcon fontSize="large" />
             <Typography variant="caption">Large</Typography>
           </Stack>
+        </Stack>
+
+        <Divider sx={{ my: 1 }} />
+
+        {/* Theme section */}
+        <Typography variant="h4" fontWeight={600} mb={2}>
+          Theme
+        </Typography>
+
+        <Stack direction="row" spacing={1}>
+          <Button
+            fullWidth
+            variant={mode === "dark"?"outlined":"contained"}
+            startIcon={<LightModeIcon />}
+            size="medium"
+            sx={{
+              borderRadius: 3,
+              // py: 1.5,
+              textTransform: "none",
+              fontWeight: 600,
+            }}
+            onClick={toggleMode}
+          >
+            Light Mode
+          </Button>
+
+          <Button
+            fullWidth
+            variant={mode === "dark"?"contained":"outlined"}
+            startIcon={<DarkModeIcon />}
+             size="medium"
+            sx={{
+              borderRadius: 3,
+              // py: 1.5,
+              textTransform: "none",
+              fontWeight: 600,
+            }}
+            onClick={toggleMode}
+          >
+            Dark Mode
+          </Button>
         </Stack>
       </Popover>
     </>

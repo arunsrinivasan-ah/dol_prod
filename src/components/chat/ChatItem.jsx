@@ -1,4 +1,4 @@
-import { Box, Menu, MenuItem, Typography } from "@mui/material";
+import { Box, Menu, MenuItem, Typography, useTheme } from "@mui/material";
 import ChatIcon from "@mui/icons-material/Chat";
 import { Message } from "../../assets/svgIcons/message";
 import { useThemeMode } from "../../context/ThemeModeContext";
@@ -8,6 +8,7 @@ import { useState } from "react";
 import { DeleteIcon } from "../../assets/svgIcons/DeleteIcon";
 
 export const ChatItem = ({ title, active, onClick }) => {
+  const theme = useTheme();
   const { mode } = useThemeMode();
   const [anchorEl, setAnchorEl] = useState(null);
 
@@ -48,12 +49,12 @@ export const ChatItem = ({ title, active, onClick }) => {
         }}
         onClick={onClick}
       >
-        <Message size={22} color={mode === "dark" ? "#1cb0f6" : "#106BA3"} />
+        <Message size={22} color={theme.palette.text.main} />
 
         <Typography
           variant="body2"
           sx={{
-           width: "80%",
+            width: "80%",
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -96,7 +97,7 @@ export const ChatItem = ({ title, active, onClick }) => {
           }}
           onClick={handleMenuOpen}
         >
-          <Threedot size={22} color={mode === "dark" ? "#FFFFFF" : "#464646"} />
+          <Threedot size={22} color={theme.palette.text.menu} />
         </Box>
         <Menu
           anchorEl={anchorEl}
@@ -111,17 +112,17 @@ export const ChatItem = ({ title, active, onClick }) => {
               border: "1px solid",
               borderColor: "primary.main",
               backgroundColor: "background.paper",
-              marginLeft:15
+              marginLeft: 15,
             },
           }}
         >
           <MenuItem onClick={handleMenuClose} sx={{ display: "flex", gap: 1 }}>
-            <Pin size={16} color={mode === "dark" ? "#FFFFFF" :"#000"} />
+            <Pin size={16} color={theme.palette.text.primary} />
             Pin
           </MenuItem>
 
           <MenuItem sx={{ display: "flex", gap: 1 }} onClick={handleMenuClose}>
-            <DeleteIcon size={18} color={mode === "dark" ? "#FFFFFF" :"#000"} />
+            <DeleteIcon size={18} color={theme.palette.text.primary} />
             Delete
           </MenuItem>
         </Menu>
