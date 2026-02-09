@@ -50,8 +50,6 @@ export default function Login({ onLoginSuccess }) {
       const userId = await loginApi(email, password);
       onLoginSuccess(userId);
     } catch (error) {
-      console.log("wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",error?.response);
-      
       const message =
         error?.response?.detail||
         error?.message ||
