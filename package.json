@@ -2,7 +2,7 @@
   "name": "dolphin-ui",
   "version": "0.1.0",
   "private": true,
-  "proxy": "http://3.108.150.55",
+  "proxy": "https://dolphin.marinerskills.com",
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
@@ -19,6 +19,7 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-pdf": "^10.3.0",
+    "react-player": "^3.4.0",
     "react-router-dom": "^7.11.0",
     "react-scripts": "5.0.1",
     "web-vitals": "^2.1.0"

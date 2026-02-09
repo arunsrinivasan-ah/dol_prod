@@ -28,3 +28,5 @@ This file tracks all significant updates, improvements, and fixes made to the pr
 
 -FontSettting done partially @Anjali -14-01-2026
 
+-Email validation removed @Anjali 09-02-2026
+
