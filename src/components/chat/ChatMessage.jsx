@@ -207,6 +207,7 @@ const ChatMessage = ({
                       transition: "0.2s",
                       border: "1px solid",
                       borderColor: "text.caption",
+                      cursor:"pointer",
                       "&:hover": {
                         borderColor: "primary.main",
                         transform: "translateY(-2px)",

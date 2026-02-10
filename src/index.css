@@ -40,7 +40,6 @@ img {
 ul,ol{
   display: flex;
   flex-direction: column;
-  /* gap: 18px; */
   margin: 0;
   padding-top: 5px;
   padding-bottom: 5px;
@@ -49,10 +48,10 @@ ul,ol{
 }
 
 
-ol > li {
+ol > li > ul {
   /* display: flex;
   flex-direction: column; */
- 
+ padding-block-end: 0;
 }
 
 p {

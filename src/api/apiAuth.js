@@ -20,13 +20,18 @@ export const loginApi = async (email, password) => {
 
     return userId;
   } catch (error) {
-    if (error.response) {
-      throw new Error(
-        error.response.data?.message || error.response.data || "Login failed"
-      );
-    } else {
-      throw new Error(error.message || "Network error");
-    }
+
+    console.log("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",error);
+    
+     if (error.response) {
+    throw new Error(
+      error.response.data?.detail ||
+      error.response.data?.message ||
+      "Login failed"
+    );
+  } else {
+    throw new Error("Network error");
+  }
   }
 };
 

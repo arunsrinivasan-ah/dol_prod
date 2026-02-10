@@ -9,9 +9,7 @@ import "react-pdf/dist/Page/TextLayer.css";
 
 import { pdfjs } from "react-pdf";
 
-pdfjs.GlobalWorkerOptions.workerSrc = 
-  `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
-
+pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 const BLOCKED_KEYS = ["Escape", "F12", "PrintScreen"];
 
@@ -92,12 +90,30 @@ const MediaPreviewModal = ({ open, onClose, type, src }) => {
         }}
       >
         {(type === "image" || type === "pdf") && (
-          <IconButton onClick={toggleFullscreen} sx={{ color: "white" }}>
+          <IconButton
+            onClick={toggleFullscreen}
+            sx={{
+              bgcolor: "black",
+              color: "white",
+              "&:hover": {
+                bgcolor: "black",
+              },
+            }}
+          >
             {isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
           </IconButton>
         )}
 
-        <IconButton onClick={onClose} sx={{ color: "white" }}>
+        <IconButton
+          onClick={onClose}
+          sx={{
+            bgcolor: "black",
+            color: "white",
+            "&:hover": {
+              bgcolor: "black",
+            },
+          }}
+        >
           <CloseIcon />
         </IconButton>
       </Stack>
@@ -146,7 +162,11 @@ const MediaPreviewModal = ({ open, onClose, type, src }) => {
 
         {/* 📄 PDF */}
         {type === "pdf" && (
-          <SecurePdfViewer src={src} isFullscreen={isFullscreen} onClose={onClose} />
+          <SecurePdfViewer
+            src={src}
+            isFullscreen={isFullscreen}
+            onClose={onClose}
+          />
         )}
       </DialogContent>
     </Dialog>

@@ -33,8 +33,6 @@ export default function Login({ onLoginSuccess }) {
     const newErrors = {};
 
     if (!email) newErrors.email = "Email is required";
-    else if (!/\S+@\S+\.\S+/.test(email))
-      newErrors.email = "Enter a valid email address";
 
     if (!password) newErrors.password = "Password is required";
     else if (password.length < 6)
@@ -52,13 +50,14 @@ export default function Login({ onLoginSuccess }) {
       const userId = await loginApi(email, password);
       onLoginSuccess(userId);
     } catch (error) {
-      const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        "Something went wrong";
+      console.log(
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        error,
+      );
 
-      setErrors({ form: message });
-      setErrors({ form: error.message });
+      setErrors({
+        form: error.message || "Something went wrong",
+      });
     }
   };
 
@@ -272,10 +271,13 @@ export default function Login({ onLoginSuccess }) {
                 </Typography>
                 <TextField
                   placeholder="Enter your email"
-                  type="email"
+                  type="text"
                   fullWidth
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setErrors((prev) => ({ ...prev, form: null }));
+                  }}
                   error={!!errors.email}
                   helperText={errors.email}
                   sx={{
