@@ -50,13 +50,14 @@ export default function Login({ onLoginSuccess }) {
       const userId = await loginApi(email, password);
       onLoginSuccess(userId);
     } catch (error) {
-      const message =
-        error?.response?.detail||
-        error?.message ||
-        "Something went wrong";
+      console.log(
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        error,
+      );
 
-      setErrors({ form: message });
-      setErrors({ form: error.message });
+      setErrors({
+        form: error.message || "Something went wrong",
+      });
     }
   };
 
@@ -273,7 +274,10 @@ export default function Login({ onLoginSuccess }) {
                   type="text"
                   fullWidth
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setErrors((prev) => ({ ...prev, form: null }));
+                  }}
                   error={!!errors.email}
                   helperText={errors.email}
                   sx={{
@@ -357,7 +361,7 @@ export default function Login({ onLoginSuccess }) {
 
             {errors.form && (
               <Typography color="error" textAlign="center">
-                {errors.form?.detail}
+                {errors.form}
               </Typography>
             )}
 
