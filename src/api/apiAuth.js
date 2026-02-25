@@ -1,9 +1,12 @@
 import axios from "axios";
 
+const APP_URL = process.env.REACT_APP_BASE_URL;
 export const loginApi = async (email, password) => {
+  console.log("iiiiiiiiiiiiiiiiiiiieeeeeeeeee",APP_URL);
+  
   try {
     const response = await axios.post(
-      "/login",
+      `${APP_URL}/login`,
       { email, password },
       {
         headers: {
@@ -13,7 +16,7 @@ export const loginApi = async (email, password) => {
       }
     );
 
-    const userId = response.data.user_id; // ✅ correct
+    const userId = response.data.user_id; 
 
     localStorage.setItem("userId", userId);
     localStorage.setItem("userData", JSON.stringify(response.data));
@@ -21,8 +24,7 @@ export const loginApi = async (email, password) => {
     return userId;
   } catch (error) {
 
-    console.log("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",error);
-    
+
      if (error.response) {
     throw new Error(
       error.response.data?.detail ||
@@ -38,7 +40,7 @@ export const loginApi = async (email, password) => {
 export const logout = async () => {
   try {
     await axios.post(
-      "/logout",
+      `${APP_URL}/logout`,
       {},
       {
         withCredentials: true, // same as credentials: 'include'

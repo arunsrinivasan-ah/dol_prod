@@ -1,8 +1,9 @@
 import axios from "axios";
 
+const APP_URL = process.env.REACT_APP_BASE_URL;
 export const fetchHealth = async () => {
   try {
-    const resp = await axios.get("/api/v1/health", {
+    const resp = await axios.get(`${APP_URL}/api/v1/health`, {
       withCredentials: true,
     });
 
@@ -21,7 +22,7 @@ export const fetchHealth = async () => {
 export const createSession = async () => {
   try {
     const response = await axios.post(
-      "/sessions",
+      `${APP_URL}/sessions`,
       {},
       {
         headers: {
@@ -47,7 +48,7 @@ export const ensureSession = async (currentSessionId) => {
 export const sendMessage = async (sessionId, messageText) => {
   try {
     const response = await axios.post(
-      "/chat",
+      `${APP_URL}/chat`,
       {
         content: messageText,
         session_id: sessionId,
@@ -64,7 +65,7 @@ export const sendMessage = async (sessionId, messageText) => {
     const data = response.data;
 
      try {
-      const response = await axios.get("/sessions", {
+      const response = await axios.get(`${APP_URL}/sessions`, {
         params:  {},
         withCredentials: true,
       });
