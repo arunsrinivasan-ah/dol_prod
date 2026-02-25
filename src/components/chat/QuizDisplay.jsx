@@ -10,6 +10,8 @@ import {
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 
+const APP_URL =process.env.REACT_APP_BASE_URL;
+
 const QuizDisplay = ({ quizContet }) => {
   const [answers, setAnswers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -35,7 +37,7 @@ const QuizDisplay = ({ quizContet }) => {
 
     try {
       const resp = await axios.post(
-        "/quiz/grade",
+        `${APP_URL}/quiz/grade`,
         {
           quiz_items: quizContet.quiz_items,
           user_answers: answers,

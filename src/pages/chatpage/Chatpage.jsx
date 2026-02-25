@@ -6,6 +6,8 @@ import { fetchHealth } from "../../api/fetchApi";
 import axios from "axios";
 import Header from "../../components/header/Header";
 
+const APP_URL =process.env.REACT_APP_BASE_URL;
+
 const Chatpage = ({ userId, setUserId, onLogout }) => {
   const [sessionData, setSessionData] = useState(null);
   const [activeIndex, setActiveIndex] = useState(null);
@@ -24,7 +26,7 @@ const Chatpage = ({ userId, setUserId, onLogout }) => {
   const fetchSessions = async (searchTerm = "") => {
     try {
       setSessionsLoading(true);
-      const response = await axios.get("/sessions", {
+      const response = await axios.get(`${APP_URL}/sessions`, {
         params: searchTerm ? { search: searchTerm } : {},
         withCredentials: true,
       });
@@ -43,7 +45,7 @@ const Chatpage = ({ userId, setUserId, onLogout }) => {
     try {
       setSessionDetailsLoading(true);
 
-      const response = await axios.get(`/sessions/${sessionId}`, {
+      const response = await axios.get(`${APP_URL}/sessions/${sessionId}`, {
         withCredentials: true,
       });
 
