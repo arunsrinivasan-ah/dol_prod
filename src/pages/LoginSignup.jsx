@@ -353,7 +353,18 @@ export default function Login({ onLoginSuccess }) {
             <Box textAlign="right" my={1}>
               <Typography
                 variant="h6"
-                sx={{ fontWeight: 600, color: "primary.main" }}
+                onClick={() =>
+                  (window.location.href =
+                    "https://cms.marinerskills.com/DolphinForgotPassword.php")
+                }
+                sx={{
+                  fontWeight: 600,
+                  color: "primary.main",
+                  cursor: "pointer",
+                  "&:hover": {
+                    textDecoration: "underline",
+                  },
+                }}
               >
                 Forgot Password ?
               </Typography>
