@@ -354,8 +354,11 @@ export default function Login({ onLoginSuccess }) {
               <Typography
                 variant="h6"
                 onClick={() =>
-                  (window.location.href =
-                    "https://cms.marinerskills.com/DolphinForgotPassword.php")
+                  window.open(
+                    "https://cms.marinerskills.com/DolphinForgotPassword.php",
+                    "_blank",
+                    "noopener,noreferrer",
+                  )
                 }
                 sx={{
                   fontWeight: 600,
