@@ -20,11 +20,13 @@ import LocalPostOfficeIcon from "@mui/icons-material/LocalPostOffice";
 import HttpsIcon from "@mui/icons-material/Https";
 import raindropImg from "../assets/images/Rain_drop.png";
 import { useThemeMode } from "../context/ThemeModeContext";
+import ForgotPasswordPopup from "./ForgotPasswordPopup";
 
 export default function Login({ onLoginSuccess }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState({});
+  const [openForgot, setOpenForgot] = useState(false);
 
   const { mode } = useThemeMode();
   const theme = useTheme();
@@ -50,11 +52,6 @@ export default function Login({ onLoginSuccess }) {
       const userId = await loginApi(email, password);
       onLoginSuccess(userId);
     } catch (error) {
-      console.log(
-        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-        error,
-      );
-
       setErrors({
         form: error.message || "Something went wrong",
       });
@@ -353,13 +350,7 @@ export default function Login({ onLoginSuccess }) {
             <Box textAlign="right" my={1}>
               <Typography
                 variant="h6"
-                onClick={() =>
-                  window.open(
-                    "https://cms.marinerskills.com/DolphinForgotPassword.php",
-                    "_blank",
-                    "noopener,noreferrer",
-                  )
-                }
+                onClick={() => setOpenForgot(true)}
                 sx={{
                   fontWeight: 600,
                   color: "primary.main",
@@ -397,16 +388,6 @@ export default function Login({ onLoginSuccess }) {
 
             <Typography
               variant="caption"
-              textAlign="center"
-              color="text.smallheading"
-              mb={1}
-              fontWeight={600}
-            >
-              CONTACT HELP DESK
-            </Typography>
-
-            <Typography
-              variant="caption"
               sx={{
                 color: "text.smallheading",
                 textAlign: "center",
@@ -440,6 +421,11 @@ export default function Login({ onLoginSuccess }) {
           }}
         />
       </Box>
+
+      <ForgotPasswordPopup
+        open={openForgot}
+        handleClose={() => setOpenForgot(false)}
+      />
     </Box>
   );
 }
