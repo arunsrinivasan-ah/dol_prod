@@ -52,10 +52,10 @@
 // // Main sendMessage function with proper SSE/stream handling
 // export const sendMessage = async (sessionId, messageText, signal, callbacks) => {
 //   const { onContentToken, onSuggestions, onMedia, onError, onDone } = callbacks;
-  
+
 //   try {
 //     const userId = localStorage.getItem("user_id");
-    
+
 //     const response = await fetch(`${APP_URL}/chat`, {
 //       method: 'POST',
 //       headers: {
@@ -89,7 +89,7 @@
 //       for (const line of lines) {
 //         if (line.startsWith('data: ')) {
 //           const data = line.slice(6);
-          
+
 //           if (data === '[DONE]') {
 //             onDone();
 //             return;
@@ -97,7 +97,7 @@
 
 //           try {
 //             const parsed = JSON.parse(data);
-            
+
 //             // Handle different response types
 //             if (parsed.type === 'content' || parsed.content) {
 //               // Handle streaming content
@@ -106,7 +106,7 @@
 //                 onContentToken(contentToAdd);
 //               }
 //             }
-            
+
 //             // Handle complete response with all data
 //             if (parsed.videos || parsed.images || parsed.pdfs || parsed.question_suggestions) {
 //               // This is a complete response with media
@@ -120,7 +120,7 @@
 //                 onSuggestions(parsed.question_suggestions);
 //               }
 //             }
-            
+
 //             // Handle partial media updates
 //             if (parsed.video_suggestions && onMedia) {
 //               onMedia({ 
@@ -129,16 +129,16 @@
 //                 pdfs: parsed.pdfs || [] 
 //               });
 //             }
-            
+
 //           } catch (e) {
 //             console.error('Failed to parse SSE data:', e, data);
 //           }
 //         }
 //       }
 //     }
-    
+
 //     onDone();
-    
+
 //   } catch (error) {
 //     if (error.name === 'AbortError') {
 //       throw error;
@@ -434,7 +434,7 @@
 //       if (done) break;
 
 //       buffer += decoder.decode(value, { stream: true });
-      
+
 //       const lines = buffer.split("\n");
 //       buffer = lines.pop();
 
@@ -446,9 +446,9 @@
 //           try {
 //             const jsonStr = trimmedLine.replace(/^data: /, "");
 //             const chunk = JSON.parse(jsonStr);
-            
+
 //             if (onChunk) onChunk(chunk);
-            
+
 //             // Custom delays per chunk type
 //             let delay = 0;
 //             switch (chunk.type) {
@@ -461,7 +461,7 @@
 //               default:
 //                 delay = 0;
 //             }
-            
+
 //             if (delay > 0) {
 //               await new Promise(resolve => setTimeout(resolve, delay));
 //             }
@@ -738,155 +738,155 @@ export const ensureSession = async (currentSessionId) => {
  * handle accordingly. When it streams the content word-by-word we simulate
  * the typing effect ourselves so the UI still feels live.
  */
-// export const sendMessage = async (
-//   sessionId,
-//   messageText,
-//   signal,
-//   {
-//     onContentToken,
-//     onSuggestions,
-//     onMedia,
-//     onError,
-//     onDone,
-//   } = {}
-// ) => {
-//   const userId = localStorage.getItem("user_id");
+export const sendMessage = async (
+  sessionId,
+  messageText,
+  signal,
+  {
+    onContentToken,
+    onSuggestions,
+    onMedia,
+    onError,
+    onDone,
+  } = {}
+) => {
+  const userId = localStorage.getItem("user_id");
 
-//   let response;
-//   try {
-//     response = await fetch(`${APP_URL}/chat`, {
-//       method: "POST",
-//       headers: { "Content-Type": "application/json" },
-//       credentials: "include",
-//       signal,
-//       body: JSON.stringify({
-//         content: messageText,
-//         session_id: sessionId,
-//         user_id: userId,
-//       }),
-//     });
-//   } catch (err) {
-//     if (err.name === "AbortError") throw err;
-//     onError?.(err.message || "Network error");
-//     return;
-//   }
+  let response;
+  try {
+    response = await fetch(`${APP_URL}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      signal,
+      body: JSON.stringify({
+        content: messageText,
+        session_id: sessionId,
+        user_id: userId,
+      }),
+    });
+  } catch (err) {
+    if (err.name === "AbortError") throw err;
+    onError?.(err.message || "Network error");
+    return;
+  }
 
-//   if (!response.ok) {
-//     const text = await response.text();
-//     onError?.(text || `HTTP ${response.status}`);
-//     return;
-//   }
+  if (!response.ok) {
+    const text = await response.text();
+    onError?.(text || `HTTP ${response.status}`);
+    return;
+  }
 
-//   const contentType = response.headers.get("content-type") || "";
+  const contentType = response.headers.get("content-type") || "";
 
-//   // ── CASE 1: True SSE / text stream ───────────────────────────────────────
-//   if (contentType.includes("text/event-stream") || contentType.includes("text/plain")) {
-//     const reader = response.body.getReader();
-//     const decoder = new TextDecoder("utf-8");
-//     let buffer = "";
+  // ── CASE 1: True SSE / text stream ───────────────────────────────────────
+  if (contentType.includes("text/event-stream") || contentType.includes("text/plain")) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
 
-//     const processLine = (line) => {
-//       if (!line.startsWith("data:")) return;
-//       const jsonStr = line.slice(5).trim();
-//       if (!jsonStr) return;
+    const processLine = (line) => {
+      if (!line.startsWith("data:")) return;
+      const jsonStr = line.slice(5).trim();
+      if (!jsonStr) return;
 
-//       let event;
-//       try { event = JSON.parse(jsonStr); } catch { return; }
+      let event;
+      try { event = JSON.parse(jsonStr); } catch { return; }
 
-//       switch (event.type) {
-//         case "content":
-//           onContentToken?.(event.token ?? "");
-//           break;
-//         case "suggestions":
-//           onSuggestions?.(event.question_suggestions ?? []);
-//           break;
-//         case "media":
-//           onMedia?.({
-//             videos: event.videos ?? [],
-//             images: event.images ?? [],
-//             pdfs: event.pdfs ?? [],
-//           });
-//           break;
-//         case "error":
-//           onError?.(event.message ?? "Unknown error");
-//           break;
-//         default:
-//           break;
-//       }
-//     };
+      switch (event.type) {
+        case "content":
+          onContentToken?.(event.token ?? "");
+          break;
+        case "suggestions":
+          onSuggestions?.(event.question_suggestions ?? []);
+          break;
+        case "media":
+          onMedia?.({
+            videos: event.videos ?? [],
+            images: event.images ?? [],
+            pdfs: event.pdfs ?? [],
+          });
+          break;
+        case "error":
+          onError?.(event.message ?? "Unknown error");
+          break;
+        default:
+          break;
+      }
+    };
 
-//     while (true) {
-//       const { done, value } = await reader.read();
-//       if (done) break;
-//       buffer += decoder.decode(value, { stream: true });
-//       const parts = buffer.split("\n\n");
-//       buffer = parts.pop();
-//       for (const part of parts) {
-//         for (const line of part.split("\n")) {
-//           processLine(line.trim());
-//         }
-//       }
-//     }
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop();
+      for (const part of parts) {
+        for (const line of part.split("\n")) {
+          processLine(line.trim());
+        }
+      }
+    }
 
-//     if (buffer.trim()) {
-//       for (const line of buffer.split("\n")) {
-//         processLine(line.trim());
-//       }
-//     }
+    if (buffer.trim()) {
+      for (const line of buffer.split("\n")) {
+        processLine(line.trim());
+      }
+    }
 
-//     onDone?.();
-//     return;
-//   }
+    onDone?.();
+    return;
+  }
 
-//   // CASE 2: Single JSON response (your current backend) ──────────────────
-//   // Read the full body, parse it, then simulate word-by-word streaming
-//   // so the UI still shows the typing effect.
-//   let data;
-//   try {
-//     const text = await response.text();
-//     data = JSON.parse(text);
-//   } catch (err) {
-//     onError?.("Failed to parse server response");
-//     return;
-//   }
+  // CASE 2: Single JSON response (your current backend) ──────────────────
+  // Read the full body, parse it, then simulate word-by-word streaming
+  // so the UI still shows the typing effect.
+  let data;
+  try {
+    const text = await response.text();
+    data = JSON.parse(text);
+  } catch (err) {
+    onError?.("Failed to parse server response");
+    return;
+  }
 
-//   // The content lives at data.content (your API shape)
-//   const fullContent = data.content || "";
-//   const suggestions = data.question_suggestions || [];
-//   const videos      = data.videos  || data.video_suggestions || [];
-//   const images      = data.images  || [];
-//   const pdfs        = data.pdfs    || [];
+  // The content lives at data.content (your API shape)
+  const fullContent = data.content || "";
+  const suggestions = data.question_suggestions || [];
+  const videos      = data.videos  || data.video_suggestions || [];
+  const images      = data.images  || [];
+  const pdfs        = data.pdfs    || [];
 
-//   if (!fullContent) {
-//     onError?.("Empty response from server");
-//     return;
-//   }
+  if (!fullContent) {
+    onError?.("Empty response from server");
+    return;
+  }
 
-//   // Simulate word-by-word streaming so the UI animates
-//   // Split on spaces but keep the space attached so words join correctly
-//   const words = fullContent.split(/(?<=\s)|(?=\s)/);
+  // Simulate word-by-word streaming so the UI animates
+  // Split on spaces but keep the space attached so words join correctly
+  const words = fullContent.split(/(?<=\s)|(?=\s)/);
 
-//   for (const word of words) {
-//     // Respect abort signal between words
-//     if (signal?.aborted) return;
+  for (const word of words) {
+    // Respect abort signal between words
+    if (signal?.aborted) return;
 
-//     onContentToken?.(word);
+    onContentToken?.(word);
 
-//     // Small delay between words — adjust to taste (15–40 ms feels natural)
-//     await delay(20);
-//   }
+    // Small delay between words — adjust to taste (15–40 ms feels natural)
+    await delay(20);
+  }
 
-//   // Fire suggestions and media after content is done
-//   if (suggestions.length > 0) {
-//     onSuggestions?.(suggestions);
-//   }
+  // Fire suggestions and media after content is done
+  if (suggestions.length > 0) {
+    onSuggestions?.(suggestions);
+  }
 
-//   if (videos.length > 0 || images.length > 0 || pdfs.length > 0) {
-//     onMedia?.({ videos, images, pdfs });
-//   }
+  if (videos.length > 0 || images.length > 0 || pdfs.length > 0) {
+    onMedia?.({ videos, images, pdfs });
+  }
 
-//   onDone?.();
-// };
+  onDone?.();
+};
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 
@@ -955,107 +955,107 @@ export const deleteSession = async (sessionId) => {
 };
 
 
-export const sendMessage = (
-  sessionId,
-  messageText,
-  signal,
-  {
-    onContentToken,
-    onSuggestions,
-    onMedia,
-    onError,
-    onDone,
-  } = {}
-) => {
-  const userId = localStorage.getItem("user_id");
+// export const sendMessage = (
+//   sessionId,
+//   messageText,
+//   signal,
+//   {
+//     onContentToken,
+//     onSuggestions,
+//     onMedia,
+//     onError,
+//     onDone,
+//   } = {}
+// ) => {
+//   const userId = localStorage.getItem("user_id");
 
-  const url = new URL(`${APP_URL}/chat/stream`);
-  url.searchParams.append("message", messageText);
-  url.searchParams.append("session_id", sessionId);
-  url.searchParams.append("user_id", userId);
+//   const url = new URL(`${APP_URL}/chat/stream`);
+//   url.searchParams.append("message", messageText);
+//   url.searchParams.append("session_id", sessionId);
+//   url.searchParams.append("user_id", userId);
 
-  let isClosed = false;
+//   let isClosed = false;
 
-  const eventSource = new EventSource(url.toString(), {
-    withCredentials: true,
-  });
+//   const eventSource = new EventSource(url.toString(), {
+//     withCredentials: true,
+//   });
 
-  // 🔥 Abort handling
-  const cleanup = () => {
-    if (!isClosed) {
-      isClosed = true;
-      eventSource.close();
-    }
-  };
+//   //  Abort handling
+//   const cleanup = () => {
+//     if (!isClosed) {
+//       isClosed = true;
+//       eventSource.close();
+//     }
+//   };
 
-  if (signal) {
-    signal.addEventListener("abort", cleanup);
-  }
+//   if (signal) {
+//     signal.addEventListener("abort", cleanup);
+//   }
 
-  // 🔥 Main message handler
-  eventSource.onmessage = (event) => {
-    if (!event?.data) return;
+//   //  Main message handler
+//   eventSource.onmessage = (event) => {
+//     if (!event?.data) return;
 
-    let data;
-    try {
-      data = JSON.parse(event.data);
-    } catch (err) {
-      console.warn("Invalid JSON chunk:", event.data);
-      return;
-    }
+//     let data;
+//     try {
+//       data = JSON.parse(event.data);
+//     } catch (err) {
+//       console.warn("Invalid JSON chunk:", event.data);
+//       return;
+//     }
 
-    switch (data.type) {
-      case "content": {
-        const token = data.token ?? "";
+//     switch (data.type) {
+//       case "content": {
+//         const token = data.token ?? "";
 
-        // ✅ immediate UI update
-        onContentToken?.(token + " ");
-        break;
-      }
+//         // ✅ immediate UI update
+//         onContentToken?.(token + " ");
+//         break;
+//       }
 
-      case "suggestions":
-        onSuggestions?.(data.question_suggestions ?? []);
-        break;
+//       case "suggestions":
+//         onSuggestions?.(data.question_suggestions ?? []);
+//         break;
 
-      case "media":
-        onMedia?.({
-          videos: data.videos ?? [],
-          images: data.images ?? [],
-          pdfs: data.pdfs ?? [],
-        });
-        break;
+//       case "media":
+//         onMedia?.({
+//           videos: data.videos ?? [],
+//           images: data.images ?? [],
+//           pdfs: data.pdfs ?? [],
+//         });
+//         break;
 
-      case "done":
-        onDone?.();
-        cleanup();
-        break;
+//       case "done":
+//         onDone?.();
+//         cleanup();
+//         break;
 
-      case "error":
-        onError?.(data.message ?? "Unknown error");
-        cleanup();
-        break;
+//       case "error":
+//         onError?.(data.message ?? "Unknown error");
+//         cleanup();
+//         break;
 
-      default:
-        break;
-    }
-  };
+//       default:
+//         break;
+//     }
+//   };
 
-  // 🔥 Error handling (important for stability)
-  eventSource.onerror = (err) => {
-    console.error("SSE error:", err);
+//   // 🔥 Error handling (important for stability)
+//   eventSource.onerror = (err) => {
+//     console.error("SSE error:", err);
 
-    // readyState 2 = closed
-    if (eventSource.readyState === 2) {
-      onError?.("Stream closed unexpectedly");
-      cleanup();
-    }
-  };
+//     // readyState 2 = closed
+//     if (eventSource.readyState === 2) {
+//       onError?.("Stream closed unexpectedly");
+//       cleanup();
+//     }
+//   };
 
-  // 🔥 Optional: connection open debug
-  eventSource.onopen = () => {
-    console.log("SSE connected");
-  };
+//   // 🔥 Optional: connection open debug
+//   eventSource.onopen = () => {
+//     console.log("SSE connected");
+//   };
 
-  // 🔥 Return manual cleanup (important)
-  return cleanup;
-};
+//   // 🔥 Return manual cleanup (important)
+//   return cleanup;
+// };

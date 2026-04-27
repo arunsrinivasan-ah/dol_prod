@@ -9,8 +9,10 @@ import { DeleteIcon } from "../../assets/svgIcons/DeleteIcon";
 import { deleteSession } from "../../api/fetchApi";
 import ActionDialog from "./ActionDialog";
 import { saveSession } from "../../api/fetchApi";
+import SaveAltIcon from '@mui/icons-material/SaveAlt';
+import DoDisturbAltIcon from '@mui/icons-material/DoDisturbAlt';
 
-export const ChatItem = ({ title, active, onClick, sessionId, onDelete, tabType, onSave,   }) => {
+export const ChatItem = ({ title, active, onClick, sessionId, onDelete, tabType, onSave, isSaved, onUpdateSession, onToggleSave }) => {
   const theme = useTheme();
   const { mode } = useThemeMode();
   const [anchorEl, setAnchorEl] = useState(null);
@@ -27,8 +29,8 @@ export const ChatItem = ({ title, active, onClick, sessionId, onDelete, tabType,
   };
 
   const handleDialogClose = () => {
-    if (dialog.mode === "success") {
-      onDelete(sessionId); // remove from UI
+    if (dialog.mode === "success" && dialog.message.includes("deleted")) {
+      onDelete(sessionId);
     }
 
     setDialog((prev) => ({ ...prev, open: false }));
@@ -70,9 +72,6 @@ export const ChatItem = ({ title, active, onClick, sessionId, onDelete, tabType,
     handleMenuClose();
   };
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogType, setDialogType] = useState("success");
-  const [dialogMessage, setDialogMessage] = useState("");
   return (
     <Box
       sx={{
@@ -167,46 +166,49 @@ export const ChatItem = ({ title, active, onClick, sessionId, onDelete, tabType,
             },
           }}
         >
-          {tabType === 0 ? (
-            //  MY CHATS
-           <MenuItem
-  onClick={async () => {
-    handleMenuClose();
 
-    try {
-      await saveSession(sessionId);   // ✅ API call
+          {/* ✅ ONLY FOR SAVED TAB */}
+          {tabType === 1 && (
+            <MenuItem
+              onClick={async () => {
+                handleMenuClose();
 
-      // ✅ update UI instantly
-      onSave?.({
-        session_id: sessionId,
-        title,
-      });
+                try {
+                  await saveSession(sessionId);
 
-    } catch (err) {
-      console.error("Save failed:", err);
-    }
-  }}
-  sx={{ display: "flex", gap: 1 }}
->
-  <Pin size={16} color={theme.palette.text.primary} />
-  Save Chat
-</MenuItem>
-          ) : (
-            //  SAVED CHATS
-            <MenuItem onClick={() => {
-              handleMenuClose();
-              // 👉 call remove API here
-              console.log("Remove saved chat:", sessionId);
-            }} sx={{ display: "flex", gap: 1 }}>
-              <Pin size={16} color={theme.palette.text.primary} />
-              Remove
+                  const updatedStatus = !isSaved;
+
+                  onToggleSave?.(sessionId, updatedStatus);
+
+                  setDialog({
+                    open: true,
+                    mode: "success",
+                    message: updatedStatus
+                      ? "Chat saved successfully"
+                      : "Removed from saved chats",
+                  });
+                } catch (err) {
+                  console.error("Save toggle failed:", err);
+                }
+              }}
+              sx={{ display: "flex", gap: 1 }}
+            >
+              {isSaved ? (
+                <DoDisturbAltIcon sx={{ fontSize: 18 }} />
+              ) : (
+                <SaveAltIcon sx={{ fontSize: 18 }} />
+              )}
+
+              {isSaved ? "Remove from Saved" : "Save Chat"}
             </MenuItem>
           )}
 
+          {/* ✅ ALWAYS SHOW DELETE */}
           <MenuItem sx={{ display: "flex", gap: 1 }} onClick={handleDeleteClick}>
             <DeleteIcon size={18} color={theme.palette.text.primary} />
             Delete
           </MenuItem>
+
         </Menu>
       </Box>
 

@@ -130,7 +130,9 @@ const ChatWindow = ({
     el.addEventListener("scroll", onScroll);
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
-
+  const isCurrentSaved = savedSessions.some(
+    (s) => s.session_id === currentSessionId
+  );
   useEffect(() => {
     const loadSaved = async () => {
       try {
@@ -335,22 +337,22 @@ const ChatWindow = ({
       if (res.is_saved) {
         setSaveDialog({
           open: true,
-          message: res.message,
+          message: "Chat saved successfully",
           isError: false,
         });
 
-        // 🔥 THIS IS THE REAL FIX
-        // 🔥 immediate UI update + backend sync
+        //  THIS IS THE REAL FIX
+        //  immediate UI update + backend sync
         await fetchSessions?.();
 
-        // 🔥 FORCE REFRESH using saved API
+        //  FORCE REFRESH using saved API
         const savedRes = await getSavedSessions();
 
         const savedIds = new Set(
           (savedRes.saved_sessions || []).map((s) => s.session_id)
         );
 
-        // 🔥 Update sessionData manually (IMPORTANT)
+        //  Update sessionData manually (IMPORTANT)
         fetchSessions?.(undefined, (prevSessions) =>
           prevSessions.map((s) => ({
             ...s,
@@ -362,7 +364,7 @@ const ChatWindow = ({
     } catch (err) {
       setSaveDialog({
         open: true,
-        message: err.message || "Failed to save chat",
+        message: "Failed to save chat",
         isError: true,
       });
     }
@@ -456,17 +458,26 @@ const ChatWindow = ({
 
 
         <Box
-          onClick={handleSaveChat}
+          onClick={!isCurrentSaved ? handleSaveChat : undefined}
           sx={{
             display: "flex",
             alignItems: "center",
             gap: 1,
-            cursor: "pointer",
+            cursor: isCurrentSaved ? "not-allowed" : "pointer",
+            opacity: isCurrentSaved ? 0.5 : 1,
+            pointerEvents: isCurrentSaved ? "none" : "auto",
           }}
         >
-          <Saveoutlined size={22} color={mode === "dark" ? "#1cb0f6" : "#106BA3"} />
-          <Typography variant="body1" sx={{ color: "text.primary" }}>
-            Save Chat
+          <Saveoutlined
+            size={22}
+            color={mode === "dark" ? "#1cb0f6" : "#106BA3"}
+          />
+
+          <Typography
+            variant="body1"
+            sx={{ color: "text.primary", fontWeight: 500 }}
+          >
+            {isCurrentSaved ? "Saved Chat" : "Save Chat"}
           </Typography>
         </Box>
 

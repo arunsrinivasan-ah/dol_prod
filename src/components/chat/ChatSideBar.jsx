@@ -47,6 +47,7 @@ const ChatSideBar = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [savedSessions, setSavedSessions] = useState([]);
   const [savedLoading, setSavedLoading] = useState(false);
+  const [localSessions, setLocalSessions] = useState(sessionData || []);
 
   // Fetch saved sessions when tab changes to Saved Chats
   useEffect(() => {
@@ -54,6 +55,45 @@ const ChatSideBar = ({
       loadSavedSessions();
     }
   }, [valueTab]);
+
+useEffect(() => {
+  setLocalSessions((prev) => {
+    return (sessionData || []).map((apiChat) => {
+      const local = prev.find(
+        (s) => s.session_id === apiChat.session_id
+      );
+
+      // ✅ keep local is_saved if exists
+      return local
+        ? { ...apiChat, is_saved: local.is_saved }
+        : apiChat;
+    });
+  });
+}, [sessionData]);
+
+  const handleToggleSave = (id, newStatus) => {
+    const chat = localSessions.find((s) => s.session_id === id);
+
+    // update My Chats
+    setLocalSessions((prev) =>
+      prev.map((s) =>
+        s.session_id === id ? { ...s, is_saved: newStatus } : s
+      )
+    );
+
+    // update Saved Chats
+    if (newStatus) {
+      setSavedSessions((prev) => {
+        const exists = prev.some((s) => s.session_id === id);
+        if (exists) return prev;
+        return chat ? [{ ...chat, is_saved: true }, ...prev] : prev;
+      });
+    } else {
+      setSavedSessions((prev) =>
+        prev.filter((s) => s.session_id !== id)
+      );
+    }
+  };
 
   const loadSavedSessions = async () => {
     try {
@@ -120,9 +160,8 @@ const ChatSideBar = ({
     if (valueTab === 1) {
       return savedSessions;
     }
-    return sessionData || [];
-  }, [valueTab, sessionData, savedSessions]);
-
+    return localSessions || [];
+  }, [valueTab, localSessions, savedSessions]);
   // Group sessions by date
   const groupedSessions = useMemo(() => {
     if (!displaySessions || !displaySessions.length) {
@@ -398,28 +437,35 @@ const ChatSideBar = ({
                       key={chat.session_id || chat.originalIndex}
                       title={chat.title}
                       tabType={valueTab}
+                      isSaved={chat.is_saved}
                       onSave={(chat) => {
+                        // ✅ update saved tab
                         setSavedSessions((prev) => {
                           const exists = prev.some(
                             (s) => s.session_id === chat.session_id
                           );
                           if (exists) return prev;
-
                           return [chat, ...prev];
                         });
                       }}
+
+                      onToggleSave={handleToggleSave}
+
+                      onUpdateSession={(id, updates) => {
+                        // ✅ update My Chats tab
+                        // fetchSessions(); // OR better: update local state if you store it
+                      }}
                       active={chat.session_id === currentSessionId}
                       sessionId={chat.session_id}   // ✅ ADD THIS
-                      onDelete={(id) => {           // ✅ ADD THIS
-                        console.log("Removing from UI:", id);
-
-                        // remove from UI
+                      onDelete={(id) => {
                         if (valueTab === 1) {
                           setSavedSessions((prev) =>
                             prev.filter((s) => s.session_id !== id)
                           );
                         } else {
-                          fetchSessions(); // or update local state if you store sessions
+                          setLocalSessions((prev) =>
+                            prev.filter((s) => s.session_id !== id)
+                          );
                         }
                       }}
                       onClick={() => {
@@ -454,28 +500,35 @@ const ChatSideBar = ({
                       key={chat.session_id || chat.originalIndex}
                       title={chat.title}
                       tabType={valueTab}
+
+                      isSaved={chat.is_saved}
+                      onToggleSave={handleToggleSave}
                       onSave={(chat) => {
+                        // ✅ update saved tab
                         setSavedSessions((prev) => {
                           const exists = prev.some(
                             (s) => s.session_id === chat.session_id
                           );
                           if (exists) return prev;
-
                           return [chat, ...prev];
                         });
                       }}
+
+                      onUpdateSession={(id, updates) => {
+                        // ✅ update My Chats tab
+                        // fetchSessions(); // OR better: update local state if you store it
+                      }}
                       active={chat.session_id === currentSessionId}
                       sessionId={chat.session_id}   // ✅ ADD THIS
-                      onDelete={(id) => {           // ✅ ADD THIS
-                        console.log("Removing from UI:", id);
-
-                        // remove from UI
+                      onDelete={(id) => {
                         if (valueTab === 1) {
                           setSavedSessions((prev) =>
                             prev.filter((s) => s.session_id !== id)
                           );
                         } else {
-                          fetchSessions(); // or update local state if you store sessions
+                          setLocalSessions((prev) =>
+                            prev.filter((s) => s.session_id !== id)
+                          );
                         }
                       }}
                       onClick={() => {
@@ -510,15 +563,29 @@ const ChatSideBar = ({
                       key={chat.session_id || chat.originalIndex}
                       title={chat.title}
                       tabType={valueTab}
+                      isSaved={chat.is_saved}
+                      onToggleSave={handleToggleSave}
                       onSave={(chat) => {
+                        // ✅ update saved tab
                         setSavedSessions((prev) => {
                           const exists = prev.some(
                             (s) => s.session_id === chat.session_id
                           );
                           if (exists) return prev;
-
                           return [chat, ...prev];
                         });
+                      }}
+
+                      onDelete={(id) => {
+                        if (valueTab === 1) {
+                          setSavedSessions((prev) =>
+                            prev.filter((s) => s.session_id !== id)
+                          );
+                        } else {
+                          setLocalSessions((prev) =>
+                            prev.filter((s) => s.session_id !== id)
+                          );
+                        }
                       }}
                       active={chat.session_id === currentSessionId}
                       onClick={() => {
