@@ -11,6 +11,11 @@ import {
   Drawer,
   useMediaQuery,
   Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from "@mui/material";
 import React, { useState } from "react";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
@@ -46,14 +51,16 @@ const Header = ({
   sidebarOpen,
   setSidebarOpen,
   fetchSessions,
+  savedSessions,
 }) => {
   const theme = useTheme();
-   const { mode, toggleMode } = useThemeMode();
+  const { mode, toggleMode } = useThemeMode();
 
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isTablet = useMediaQuery(theme.breakpoints.between("sm", "md"));
 
   const [anchorElFont, setAnchorElFont] = useState(null);
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
 
   const { fontLevel, setFontLevel } = useThemeMode();
 
@@ -62,12 +69,27 @@ const Header = ({
   };
 
   const openFontMenu = Boolean(anchorElFont);
-
   const handleCreateNewSession = async () => {
-    setCurrentSessionData();
+    setCurrentSessionData(null); 
     setActiveIndex(null);
     setCurrentSessionId(null);
     setmessages([]);
+  };
+
+  // Handle logout button click - open confirmation dialog
+  const handleLogoutClick = () => {
+    setLogoutDialogOpen(true);
+  };
+
+  // Handle confirm logout
+  const handleConfirmLogout = () => {
+    setLogoutDialogOpen(false);
+    onLogout(); 
+  };
+
+  // Handle cancel logout
+  const handleCancelLogout = () => {
+    setLogoutDialogOpen(false);
   };
 
   return (
@@ -91,7 +113,6 @@ const Header = ({
             px: { xs: 1, sm: 3, md: 4 },
           }}
         >
-          {/* ================= LEFT ================= */}
           <Box
             display="flex"
             alignItems="center"
@@ -129,7 +150,6 @@ const Header = ({
                 <Typography
                   variant="h2"
                   sx={{
-                    // fontSize: 22,
                     fontWeight: 700,
                     color: "text.heading1",
                   }}
@@ -139,7 +159,6 @@ const Header = ({
                 <Typography
                   variant="h2"
                   sx={{
-                    // fontSize: 22,
                     fontWeight: 700,
                     color: "text.heading1",
                   }}
@@ -149,7 +168,6 @@ const Header = ({
                 <Typography
                   variant="h2"
                   sx={{
-                    // fontSize: 22,
                     fontWeight: 700,
                     color: "primary.main",
                   }}
@@ -177,7 +195,6 @@ const Header = ({
             </Box>
           </Box>
 
-          {/* ================= RIGHT ================= */}
           <Stack
             direction="row"
             spacing={{ xs: 0.5, sm: 1, md: 2 }}
@@ -223,10 +240,10 @@ const Header = ({
               {!isMobile && !isTablet && "Settings"}
             </Button>
 
-            {/* Logout */}
+            {/* Logout - Updated with confirmation */}
             <Button
               startIcon={<LogoutOutlinedIcon sx={{ color: "text.primary" }} />}
-              onClick={onLogout}
+              onClick={handleLogoutClick}
               sx={{
                 textTransform: "none",
                 color: "text.primary",
@@ -240,12 +257,70 @@ const Header = ({
         </Toolbar>
       </AppBar>
 
+      {/* dialog box for logout */}
+
+      <Dialog
+        open={logoutDialogOpen}
+        onClose={handleCancelLogout}
+        maxWidth="xs"
+        fullWidth
+        BackdropProps={{
+          sx: {
+            backdropFilter: "blur(10px)",
+            backgroundColor: "rgba(0,0,0,0.2)",
+          },
+        }}
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            px: 1,
+            border: "1.5px solid #38bdf8",
+            boxShadow: "0 8px 30px rgba(56,189,248,0.25)",
+          },
+        }}
+      >
+        <DialogTitle sx={{ pb: 1, fontWeight: 600 }}>
+          Confirm Logout
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ color: "text.secondary" }}>
+            Are you sure you want to logout? You will need to login again to access your chats.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button
+            onClick={handleCancelLogout}
+            variant="outlined"
+            sx={{
+              textTransform: "none",
+              fontWeight: 600,
+              borderRadius: 2,
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmLogout}
+            variant="contained"
+            color="primary"
+            sx={{
+              textTransform: "none",
+              fontWeight: 600,
+              borderRadius: 2,
+            }}
+            autoFocus
+          >
+            Logout
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* ================= SIDEBAR DRAWER ================= */}
       <Drawer
         anchor="left"
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        ModalProps={{ keepMounted: true }} // better mobile performance
+        ModalProps={{ keepMounted: true }}
         PaperProps={{
           sx: {
             width: 280,
@@ -254,10 +329,11 @@ const Header = ({
           },
         }}
       >
-        {/* 🔹 YOUR EXISTING CHAT SIDEBAR COMPONENT */}
+        {/*  YOUR EXISTING CHAT SIDEBAR COMPONENT */}
         <ChatSidebar
           onClose={() => setSidebarOpen(false)}
           sessionData={sessionData}
+          savedSessions={savedSessions} 
           loading={loading}
           activeIndex={activeIndex}
           setActiveIndex={setActiveIndex}
@@ -265,6 +341,7 @@ const Header = ({
           setSidebarOpen={setSidebarOpen}
           selectSession={selectSession}
           fetchSessions={fetchSessions}
+          
         />
       </Drawer>
 
@@ -337,12 +414,11 @@ const Header = ({
         <Stack direction="row" spacing={1}>
           <Button
             fullWidth
-            variant={mode === "dark"?"outlined":"contained"}
+            variant={mode === "dark" ? "outlined" : "contained"}
             startIcon={<LightModeIcon />}
             size="medium"
             sx={{
               borderRadius: 3,
-              // py: 1.5,
               textTransform: "none",
               fontWeight: 600,
             }}
@@ -353,12 +429,11 @@ const Header = ({
 
           <Button
             fullWidth
-            variant={mode === "dark"?"contained":"outlined"}
+            variant={mode === "dark" ? "contained" : "outlined"}
             startIcon={<DarkModeIcon />}
-             size="medium"
+            size="medium"
             sx={{
               borderRadius: 3,
-              // py: 1.5,
               textTransform: "none",
               fontWeight: 600,
             }}

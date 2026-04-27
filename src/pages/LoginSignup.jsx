@@ -21,12 +21,16 @@ import HttpsIcon from "@mui/icons-material/Https";
 import raindropImg from "../assets/images/Rain_drop.png";
 import { useThemeMode } from "../context/ThemeModeContext";
 import ForgotPasswordPopup from "./ForgotPasswordPopup";
+import Visibility from "@mui/icons-material/Visibility";
+import VisibilityOff from "@mui/icons-material/VisibilityOff";
+import packageJson from "../../package.json";
 
 export default function Login({ onLoginSuccess }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState({});
   const [openForgot, setOpenForgot] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const { mode } = useThemeMode();
   const theme = useTheme();
@@ -50,6 +54,7 @@ export default function Login({ onLoginSuccess }) {
 
     try {
       const userId = await loginApi(email, password);
+      localStorage.setItem("user_id", userId);
       onLoginSuccess(userId);
     } catch (error) {
       setErrors({
@@ -315,7 +320,7 @@ export default function Login({ onLoginSuccess }) {
                 </Typography>
                 <TextField
                   placeholder="Enter your password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   fullWidth
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -339,6 +344,23 @@ export default function Login({ onLoginSuccess }) {
                       startAdornment: (
                         <InputAdornment position="start">
                           <HttpsIcon sx={{ color: "text.placeholder1" }} />
+                        </InputAdornment>
+                      ),
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <Box
+                            component="span"
+                            onClick={() => setShowPassword((prev) => !prev)}
+                            sx={{ cursor: "pointer", display: "flex" }}
+                          >
+                            {showPassword ? (
+                              <VisibilityOff
+                                sx={{ color: "text.placeholder1" }}
+                              />
+                            ) : (
+                              <Visibility sx={{ color: "text.placeholder1" }} />
+                            )}
+                          </Box>
                         </InputAdornment>
                       ),
                     },
@@ -377,7 +399,7 @@ export default function Login({ onLoginSuccess }) {
               size="small"
               sx={{
                 bgcolor: "text.main",
-                py: 0.5,
+                py: 1,
                 borderRadius: 2,
                 mb: 1,
                 color: "text.white",
@@ -391,9 +413,23 @@ export default function Login({ onLoginSuccess }) {
               sx={{
                 color: "text.smallheading",
                 textAlign: "center",
+                mb: 1,
+                mt: 2,
               }}
             >
               © 2025 Mariner Skills , LLC. All rights reserved
+            </Typography>
+
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.smallheading",
+                textAlign: "center",
+                mb: 2,
+                mt: 1,
+              }}
+            >
+              Version {packageJson.version}
             </Typography>
           </Box>
         </Paper>

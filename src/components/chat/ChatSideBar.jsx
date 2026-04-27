@@ -16,7 +16,7 @@ import {
   FormControlLabel,
   Radio,
 } from "@mui/material";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { ChatItem } from "./ChatItem";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import { useThemeMode } from "../../context/ThemeModeContext";
@@ -26,8 +26,8 @@ import { SaveIcon } from "../../assets/svgIcons/Saveicon";
 import { Search } from "../../assets/svgIcons/Search";
 import { FilterIcon } from "../../assets/svgIcons/FilterIcon";
 import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
-import getTheme from "../../theme";
 import { getSidebarWidth } from "../../theme/layoutScale";
+import { getSavedSessions } from "../../api/fetchApi";
 
 const ChatSideBar = ({
   sessionData,
@@ -38,27 +38,49 @@ const ChatSideBar = ({
   sidebarOpen,
   setSidebarOpen,
   fetchSessions,
+  currentSessionId,
 }) => {
   const { mode, toggleMode } = useThemeMode();
   const [valueTab, setValueTab] = useState(0);
-
   const [openFilter, setOpenFilter] = useState(false);
   const [filterValue, setFilterValue] = useState("pinned");
-
   const [searchTerm, setSearchTerm] = useState("");
+  const [savedSessions, setSavedSessions] = useState([]);
+  const [savedLoading, setSavedLoading] = useState(false);
 
+  // Fetch saved sessions when tab changes to Saved Chats
   useEffect(() => {
-    const delayDebounce = setTimeout(() => {
-      fetchSessions(searchTerm);
-    }, 400); // debounce delay (ms)
+    if (valueTab === 1) {
+      loadSavedSessions();
+    }
+  }, [valueTab]);
 
-    return () => clearTimeout(delayDebounce);
-  }, [searchTerm]);
+  const loadSavedSessions = async () => {
+    try {
+      setSavedLoading(true);
+      const response = await getSavedSessions();
+      setSavedSessions(response.saved_sessions || []);
+    } catch (error) {
+      console.error("Failed to load saved sessions:", error);
+      setSavedSessions([]);
+    } finally {
+      setSavedLoading(false);
+    }
+  };
+
+  // Debounced search
+  useEffect(() => {
+    if (valueTab === 0) {
+      const delayDebounce = setTimeout(() => {
+        fetchSessions(searchTerm);
+      }, 400);
+      return () => clearTimeout(delayDebounce);
+    }
+  }, [searchTerm, valueTab, fetchSessions]);
 
   const tabStyle = (active) => ({
-    flex: "0 0 auto", // 👈 do NOT grow
+    flex: "0 0 auto",
     width: "auto",
-    // textTransform: "none",
     px: 0.6,
     py: 0.5,
     borderRadius: 2,
@@ -67,20 +89,73 @@ const ChatSideBar = ({
     color: active ? "text.white" : "text.primary",
     bgcolor: active ? "primary.main" : "transparent",
     transition: "all 0.25s ease",
-
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     gap: 0.5,
-
     "&.Mui-selected": {
       color: "text.white",
     },
   });
 
-  const userData = JSON.parse(localStorage.getItem("userData"));
+  // Helper function to check if date is today
+  const isToday = (dateString) => {
+    if (!dateString) return false;
+    const date = new Date(dateString);
+    const today = new Date();
+    return date.toDateString() === today.toDateString();
+  };
 
+  // Helper function to check if date is yesterday
+  const isYesterday = (dateString) => {
+    if (!dateString) return false;
+    const date = new Date(dateString);
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return date.toDateString() === yesterday.toDateString();
+  };
+
+  // Get sessions based on selected tab
+  const displaySessions = useMemo(() => {
+    if (valueTab === 1) {
+      return savedSessions;
+    }
+    return sessionData || [];
+  }, [valueTab, sessionData, savedSessions]);
+
+  // Group sessions by date
+  const groupedSessions = useMemo(() => {
+    if (!displaySessions || !displaySessions.length) {
+      return { today: [], yesterday: [], older: [] };
+    }
+
+    const groups = {
+      today: [],
+      yesterday: [],
+      older: []
+    };
+
+    displaySessions.forEach((chat, index) => {
+      const dateField = chat.updated_at || chat.created_at || chat.timestamp;
+
+      if (isToday(dateField)) {
+        groups.today.push({ ...chat, originalIndex: index });
+      } else if (isYesterday(dateField)) {
+        groups.yesterday.push({ ...chat, originalIndex: index });
+      } else {
+        groups.older.push({ ...chat, originalIndex: index });
+      }
+    });
+
+    return groups;
+  }, [displaySessions]);
+
+  const userData = JSON.parse(localStorage.getItem("userData") || "{}");
   const { fontLevel } = useThemeMode();
+
+  const isLoading = valueTab === 1 ? savedLoading : loading;
+  const hasSavedChats = (savedSessions?.length || 0) > 0;
+
   return (
     <Box
       sx={{
@@ -133,8 +208,8 @@ const ChatSideBar = ({
                   valueTab === 0
                     ? "#ffffff"
                     : mode === "dark"
-                    ? "#1cb0f6"
-                    : "#106BA3"
+                      ? "#1cb0f6"
+                      : "#106BA3"
                 }
               />
             }
@@ -151,8 +226,8 @@ const ChatSideBar = ({
                   valueTab === 1
                     ? "#ffffff"
                     : mode === "dark"
-                    ? "#1cb0f6"
-                    : "#106BA3"
+                      ? "#1cb0f6"
+                      : "#106BA3"
                 }
               />
             }
@@ -236,7 +311,7 @@ const ChatSideBar = ({
       </Box>
 
       <Typography variant={"body2"} sx={{ mb: 1, color: "text.smallheading" }}>
-        Your Chats
+        {valueTab === 0 ? "Your Chats" : "Saved Chats"}
       </Typography>
 
       <Box
@@ -249,7 +324,7 @@ const ChatSideBar = ({
           pr: 0.5,
         }}
       >
-        {loading ? (
+        {isLoading ? (
           <Stack spacing={1}>
             {[...Array(6)].map((_, index) => (
               <Skeleton
@@ -261,25 +336,210 @@ const ChatSideBar = ({
               />
             ))}
           </Stack>
-        ) : sessionData && sessionData.length ? (
-          sessionData.map((chat, index) => (
-            <ChatItem
-              key={chat.session_id || index}
-              title={chat.title}
-              active={index === activeIndex}
-              onClick={() => {
-                setActiveIndex(index);
-                selectSession(chat.session_id);
-                setSidebarOpen(false);
-              }}
+        ) : valueTab === 1 && !hasSavedChats ? (
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              height: "100%",
+              minHeight: 200,
+              gap: 2,
+            }}
+          >
+            <SaveIcon
+              size={48}
+              color={mode === "dark" ? "#1cb0f6" : "#106BA3"}
+              opacity={0.5}
             />
-          ))
+            <Typography
+              variant="body2"
+              sx={{
+                fontSize: 14,
+                color: "text.secondary",
+                textAlign: "center",
+                fontWeight: 500,
+              }}
+            >
+              NO SAVED CHATS
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{
+                fontSize: 12,
+                color: "text.disabled",
+                textAlign: "center",
+              }}
+            >
+              Pin or save your favorite chats to see them here
+            </Typography>
+          </Box>
+        ) : displaySessions && displaySessions.length ? (
+          <>
+            {groupedSessions.today.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    fontWeight: 600,
+                    mb: 1,
+                    display: "block",
+                    fontSize: 11,
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  RECENT
+                </Typography>
+                <Stack spacing={1}>
+                  {groupedSessions.today.map((chat) => (
+                    <ChatItem
+                      key={chat.session_id || chat.originalIndex}
+                      title={chat.title}
+                      tabType={valueTab}
+                      onSave={(chat) => {
+                        setSavedSessions((prev) => {
+                          const exists = prev.some(
+                            (s) => s.session_id === chat.session_id
+                          );
+                          if (exists) return prev;
+
+                          return [chat, ...prev];
+                        });
+                      }}
+                      active={chat.session_id === currentSessionId}
+                      sessionId={chat.session_id}   // ✅ ADD THIS
+                      onDelete={(id) => {           // ✅ ADD THIS
+                        console.log("Removing from UI:", id);
+
+                        // remove from UI
+                        if (valueTab === 1) {
+                          setSavedSessions((prev) =>
+                            prev.filter((s) => s.session_id !== id)
+                          );
+                        } else {
+                          fetchSessions(); // or update local state if you store sessions
+                        }
+                      }}
+                      onClick={() => {
+                        setActiveIndex(chat.originalIndex);
+                        selectSession(chat.session_id);
+                        setSidebarOpen(false);
+                      }}
+                    />
+                  ))}
+                </Stack>
+              </Box>
+            )}
+
+            {groupedSessions.yesterday.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    fontWeight: 600,
+                    mb: 1,
+                    display: "block",
+                    fontSize: 11,
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  PREVIOUS
+                </Typography>
+                <Stack spacing={1}>
+                  {groupedSessions.yesterday.map((chat) => (
+                    <ChatItem
+                      key={chat.session_id || chat.originalIndex}
+                      title={chat.title}
+                      tabType={valueTab}
+                      onSave={(chat) => {
+                        setSavedSessions((prev) => {
+                          const exists = prev.some(
+                            (s) => s.session_id === chat.session_id
+                          );
+                          if (exists) return prev;
+
+                          return [chat, ...prev];
+                        });
+                      }}
+                      active={chat.session_id === currentSessionId}
+                      sessionId={chat.session_id}   // ✅ ADD THIS
+                      onDelete={(id) => {           // ✅ ADD THIS
+                        console.log("Removing from UI:", id);
+
+                        // remove from UI
+                        if (valueTab === 1) {
+                          setSavedSessions((prev) =>
+                            prev.filter((s) => s.session_id !== id)
+                          );
+                        } else {
+                          fetchSessions(); // or update local state if you store sessions
+                        }
+                      }}
+                      onClick={() => {
+                        setActiveIndex(chat.originalIndex);
+                        selectSession(chat.session_id);
+                        setSidebarOpen(false);
+                      }}
+                    />
+                  ))}
+                </Stack>
+              </Box>
+            )}
+
+            {groupedSessions.older.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    fontWeight: 600,
+                    mb: 1,
+                    display: "block",
+                    fontSize: 11,
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  OLDER
+                </Typography>
+                <Stack spacing={1}>
+                  {groupedSessions.older.map((chat) => (
+                    <ChatItem
+                      key={chat.session_id || chat.originalIndex}
+                      title={chat.title}
+                      tabType={valueTab}
+                      onSave={(chat) => {
+                        setSavedSessions((prev) => {
+                          const exists = prev.some(
+                            (s) => s.session_id === chat.session_id
+                          );
+                          if (exists) return prev;
+
+                          return [chat, ...prev];
+                        });
+                      }}
+                      active={chat.session_id === currentSessionId}
+                      onClick={() => {
+                        setActiveIndex(chat.originalIndex);
+                        selectSession(chat.session_id);
+                        setSidebarOpen(false);
+                      }}
+                    />
+                  ))}
+                </Stack>
+              </Box>
+            )}
+          </>
         ) : (
           <Typography
             variant={"body2"}
             sx={{ fontSize: 12, color: "text.secondary" }}
           >
-            Your chat history is empty.
+            {valueTab === 0
+              ? "Your chat history is empty."
+              : "No saved chats available."}
           </Typography>
         )}
       </Box>
@@ -295,11 +555,11 @@ const ChatSideBar = ({
               : ""}
           </Typography>
           <Typography variant="caption" color="primary.main" fontWeight={500}>
-            {userData.email}
+            {userData?.email || ""}{" "}
           </Typography>
         </Box>
         <IconButton
-          // onClick={toggleMode}
+          onClick={toggleMode}
           sx={{
             width: 35,
             height: 35,
@@ -349,7 +609,6 @@ const ChatSideBar = ({
             width: 360,
             border: "1.5px solid",
             borderColor: "primary.main",
-            // p: 2,
           },
         }}
       >

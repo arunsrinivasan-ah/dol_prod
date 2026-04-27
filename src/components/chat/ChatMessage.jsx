@@ -1,3 +1,4 @@
+// ChatMessage.jsx
 import React, { useState } from "react";
 import { Box, Typography, Avatar } from "@mui/material";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
@@ -12,6 +13,24 @@ import { ImageIcon } from "../../assets/svgIcons/ImageIcon";
 import { DocumentIcon } from "../../assets/svgIcons/DocumentIcon";
 import MediaPreviewModal from "./MediaPreviewModal";
 
+// Normalise helpers — work whether the caller already normalised or not
+const normalizeVideo = (v) => ({
+  title: v.title || v.Title || "",
+  url: v.url || v.Url || v.videourl || "",
+  thumbnail: v.thumbnail || v.Thumbnail || "",
+});
+
+const normalizeImage = (img) => ({
+  title: img.title || img.Title || "Reference Image",
+  url: img.url || img.Url || "",
+  thumbnail: img.thumbnail || img.Url || img.url || "",
+});
+
+const normalizePdf = (pdf) => ({
+  title: pdf.title || pdf.Title || "Reference PDF",
+  link: pdf.link || pdf.Link || pdf.url || "",
+});
+
 const ChatMessage = ({
   msg,
   videos_suggestions,
@@ -24,25 +43,104 @@ const ChatMessage = ({
   const [showAllVideos, setShowAllVideos] = useState(false);
   const [showAllImages, setShowAllImages] = useState(false);
   const [showAllPdfs, setShowAllPdfs] = useState(false);
+  const [isUserAtBottom, setIsUserAtBottom] = useState(true);
+
   const isUser = msg.role === "user";
   const { mode } = useThemeMode();
+
   const [previewMedia, setPreviewMedia] = useState({
     open: false,
     type: null,
     src: null,
   });
 
-  const openPreview = (type, src) => {
-    setPreviewMedia({ open: true, type, src });
-  };
-
-  const closePreview = () => {
-    setPreviewMedia({ open: false, type: null, src: null });
-  };
+  const openPreview = (type, src) => setPreviewMedia({ open: true, type, src });
+  const closePreview = () => setPreviewMedia({ open: false, type: null, src: null });
 
   const handleFollowUpQuestion = async (query) => {
     setSearchQuery(query);
     await handleSend(query);
+  };
+
+  // Always normalise regardless of which shape the parent passed down
+  const normalizedVideos = (videos_suggestions || [])
+    .map(normalizeVideo)
+    .filter((v) => v.url);
+  const normalizedImages = (images_suggestions || [])
+    .map(normalizeImage)
+    .filter((img) => img.url); // ✅ only keep valid images
+  const normalizedPdfs = (pdf_suggestions || [])
+    .map(normalizePdf)
+    .filter((p) => p.link);
+
+  // question_suggestions lives directly on msg (stored there by handleSend)
+  const questionSuggestions = msg.question_suggestions || [];
+
+  // Check if media should be shown (only after content is fully loaded)
+  const shouldShowMedia = msg.mediaLoaded !== false && msg.content && msg.content.length > 0;
+
+  // Check if questions should be shown (only after content is fully loaded)
+  const shouldShowQuestions = msg.mediaLoaded !== false && questionSuggestions.length > 0;
+
+  const getFormattedTime = (timestamp) => {
+    if (!timestamp) return ""; // or "Now"
+
+    const date = new Date(timestamp);
+
+    if (isNaN(date.getTime())) return ""; // avoid Invalid Date
+
+    return date.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
+
+  // ── Shared card sx ────────────────────────────────────────────────────────
+  const mediaCardSx = {
+    position: "relative",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+    width: { xs: "43%", sm: "23%" },
+    height: { xs: 140, sm: 170 },
+    textDecoration: "none",
+    borderRadius: 2,
+    p: 0.5,
+    backgroundColor: "background.light",
+    transition: "0.2s",
+    border: "1px solid transparent",
+    borderColor: "text.caption",
+    cursor: "pointer",
+    "&:hover": {
+      borderColor: "primary.main",
+      transform: "translateY(-2px)",
+    },
+  };
+
+  const showMoreSx = {
+    mt: 1,
+    cursor: "pointer",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    color: "text.primary",
+  };
+
+  const mediaThumbnailSx = {
+    width: "100%",
+    height: { xs: 100, sm: 130 },
+    borderRadius: 1,
+    objectFit: "cover",
+  };
+
+  const mediaCaptionSx = {
+    width: "100%",
+    textAlign: "center",
+    color: "primary.main",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   };
 
   return (
@@ -54,6 +152,7 @@ const ChatMessage = ({
         flexDirection: isUser ? "row-reverse" : "row",
       }}
     >
+      {/* ── Avatar ────────────────────────────────────────────────────────── */}
       {isUser ? (
         <Avatar
           sx={{
@@ -83,6 +182,7 @@ const ChatMessage = ({
         </Box>
       )}
 
+      {/* ── Content column ────────────────────────────────────────────────── */}
       <Box
         sx={{
           display: "flex",
@@ -92,42 +192,21 @@ const ChatMessage = ({
           gap: 1,
         }}
       >
+        {/* Name + timestamp */}
         {isUser ? (
           <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-            <Typography
-              variant="h4"
-              sx={{ fontWeight: 700, color: "text.heading1" }}
-            >
+            <Typography variant="h4" sx={{ fontWeight: 700, color: "text.heading1" }}>
               You
-            </Typography>{" "}
+            </Typography>
             <Typography variant="caption" sx={{ color: "text.caption" }}>
-              {new Date(msg?.timestamp).toLocaleTimeString("en-US", {
-                hour: "numeric",
-                minute: "2-digit",
-                hour12: true,
-              })}
+              {getFormattedTime(msg?.timestamp)}
             </Typography>
           </Box>
         ) : (
           <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-            <Typography
-              variant="body1"
-              sx={{ fontWeight: 700, color: "text.heading1" }}
-            >
+            <Typography variant="body1" sx={{ fontWeight: 700, color: "text.heading1" }}>
               Dolphin AI
             </Typography>
-            {/* <Typography
-              variant="body1"
-              sx={{ fontWeight: 700, color: "text.heading1" }}
-            >
-              |
-            </Typography>
-            <Typography
-              variant="body1"
-              sx={{fontWeight: 700, color: "primary.main" }}
-            >
-              AI
-            </Typography> */}
             <Typography variant="caption" sx={{ color: "text.caption" }}>
               {new Date(msg?.timestamp).toLocaleTimeString("en-US", {
                 hour: "numeric",
@@ -138,6 +217,7 @@ const ChatMessage = ({
           </Box>
         )}
 
+        {/* ── Bubble ──────────────────────────────────────────────────────── */}
         <Box
           sx={{
             bgcolor: isUser ? "background.light" : "background.chatbackground",
@@ -146,6 +226,7 @@ const ChatMessage = ({
             whiteSpace: "pre-wrap",
           }}
         >
+          {/* Message body */}
           {isUser ? (
             <Typography variant="body1" sx={{ color: "text.secondary" }}>
               {msg.content}
@@ -153,27 +234,19 @@ const ChatMessage = ({
           ) : msg.category !== "QUIZ" ? (
             <div
               style={{ display: "flex", flexDirection: "column" }}
-              dangerouslySetInnerHTML={{
-                __html: sanitizeMarkdown(msg.content),
-              }}
+              dangerouslySetInnerHTML={{ __html: sanitizeMarkdown(msg.content) }}
             />
           ) : (
             <QuizDisplay quizContet={msg.content} />
           )}
 
-          {videos_suggestions?.length > 0 && (
+
+
+          {/* ── Video Suggestions (only after content is fully shown) ───────────────────────────*/}
+          {!isUser && shouldShowMedia && normalizedVideos.length > 0 && (
             <Box sx={{ mt: 2 }}>
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.5,
-                }}
-              >
-                <VideoIcon
-                  size={30}
-                  color={mode === "dark" ? "#e8f1fb" : "#0f1c2e"}
-                />
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}>
+                <VideoIcon size={30} color={mode === "dark" ? "#e8f1fb" : "#0f1c2e"} />
                 <Typography variant="h3" sx={{ color: "text.primary" }}>
                   Video Suggestions
                 </Typography>
@@ -184,123 +257,68 @@ const ChatMessage = ({
                   display: "flex",
                   gap: 2,
                   flexWrap: "wrap",
-                  maxHeight: showAllVideos ? "none" : { xs: 150, sm: 180 },
+                  maxHeight: showAllVideos ? "none" : { xs: 155, sm: 185 },
                   overflow: "hidden",
                   py: 1,
                 }}
               >
-                {msg.video_suggestions.map((video, i) => (
+                {normalizedVideos.map((video, i) => (
                   <Box
                     key={i}
-                    sx={{
-                      //  overflow: "hidden",
-                      position: "relative",
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
-                      width: { xs: "43%", sm: "23%" },
-                      height: { xs: 140, sm: 170 },
-                      textDecoration: "none",
-                      borderRadius: 2,
-                      p: 0.5,
-                      backgroundColor: "background.light",
-                      transition: "0.2s",
-                      border: "1px solid",
-                      borderColor: "text.caption",
-                      cursor:"pointer",
-                      "&:hover": {
-                        borderColor: "primary.main",
-                        transform: "translateY(-2px)",
-                      },
-                    }}
+                    sx={mediaCardSx}
                     onClick={() => openPreview("video", video.url)}
                   >
                     <Box
                       component="img"
                       src={video.thumbnail}
                       alt={video.title}
-                      sx={{
-                        width: "100%",
-                        height: { xs: 80, sm: 130 },
-                        borderRadius: 1,
-                        objectFit: "cover",
-                      }}
+                      sx={mediaThumbnailSx}
                     />
+                    {/* Play icon overlay */}
                     <Box
                       sx={{
                         position: "absolute",
-                        inset: 0,
+                        top: "40%",
+                        left: "50%",
+                        transform: "translate(-50%, -50%)",
                         display: "flex",
                         alignItems: "center",
-                        left: 10,
-                        bottom: -50,
+                        justifyContent: "center",
+                        width: 36,
+                        height: 36,
+                        borderRadius: "50%",
+                        backgroundColor: "rgba(0,0,0,0.45)",
                       }}
                     >
                       <PlayArrowRoundedIcon
-                        sx={{
-                          color: "background.default",
-                          fontSize: 30,
-                          "&:hover": {
-                            borderColor: "primary.main",
-                            fontSize: 32,
-                          },
-                        }}
+                        sx={{ color: "#fff", fontSize: 22 }}
                       />
                     </Box>
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        width: "100%",
-                        textAlign: "center",
-                        color: "primary.main",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
+                    <Typography variant="caption" sx={mediaCaptionSx}>
                       {video.title}
                     </Typography>
                   </Box>
                 ))}
               </Box>
 
-              {msg.video_suggestions.length > 4 && (
+              {normalizedVideos.length > 4 && (
                 <Typography
-                  onClick={() => setShowAllVideos((prev) => !prev)}
+                  onClick={() => setShowAllVideos((p) => !p)}
                   variant="body1"
-                  sx={{
-                    mt: 1,
-                    cursor: "pointer",
-                    display: "flex",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    color: "text.primary",
-                  }}
+                  sx={showMoreSx}
                 >
                   {showAllVideos ? "Show less" : "Show more"}
-                  {showAllVideos ? (
-                    <KeyboardArrowUpIcon />
-                  ) : (
-                    <KeyboardArrowDownIcon />
-                  )}
+                  {showAllVideos ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
                 </Typography>
               )}
             </Box>
           )}
 
-          {/* {images_suggestions?.length > 0 && (
+          {/* ── Reference Images (only after content is fully shown) ────────────────────────────*/}
+          {shouldShowMedia && normalizedImages.length > 0 && (
             <Box sx={{ mt: 2 }}>
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.5,
-                }}
-              >
-                <ImageIcon
-                  size={24}
-                  color={mode == "dark" ? "#e8f1fb" : "#0f1c2e"}
-                />
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}>
+                <ImageIcon size={24} color={mode === "dark" ? "#e8f1fb" : "#0f1c2e"} />
                 <Typography variant="h3" sx={{ color: "text.primary" }}>
                   Reference Images
                 </Typography>
@@ -311,101 +329,48 @@ const ChatMessage = ({
                   display: "flex",
                   gap: 2,
                   flexWrap: "wrap",
-                  maxHeight: showAllVideos ? "none" : { xs: 150, sm: 180 },
+                  maxHeight: showAllImages ? "none" : { xs: 155, sm: 185 },
                   overflow: "hidden",
                   py: 1,
                 }}
               >
-                {images_suggestions.map((img, i) => (
+                {normalizedImages.map((img, i) => (
                   <Box
                     key={i}
-                    sx={{
-                      position: "relative",
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
-                     width: { xs: "43%", sm: "23%" },
-                      height: { xs: 140, sm: 170 },
-                      textDecoration: "none",
-                      borderRadius: 2,
-                      p: 0.5,
-                      backgroundColor: "background.light",
-                      transition: "0.2s",
-                      border: "1px solid",
-                      borderColor: "text.caption",
-                      "&:hover": {
-                        borderColor: "primary.main",
-                        transform: "translateY(-2px)",
-                      },
-                    }}
-                      onClick={() => openPreview("image", img.Url)}
+                    sx={mediaCardSx}
+                    onClick={() => openPreview("image", img.url)}
                   >
                     <Box
                       component="img"
-                      src={img.thumbnail || img.Url}
-                      alt={img.Title || "image"}
-                      sx={{
-                        width: "100%",
-                        height: 130,
-                        borderRadius: 1,
-                        objectFit: "cover",
-                      }}
+                      src={img.thumbnail}
+                      alt={img.title}
+                      sx={mediaThumbnailSx}
                     />
-
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        width: "100%",
-                        textAlign: "center",
-                        color: "primary.main",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {img.Title || "Reference Image"}
+                    <Typography variant="caption" sx={mediaCaptionSx}>
+                      {img.title}
                     </Typography>
                   </Box>
                 ))}
               </Box>
 
-              {images_suggestions.length > 4 && (
+              {normalizedImages.length > 4 && (
                 <Typography
-                  onClick={() => setShowAllImages((prev) => !prev)}
+                  onClick={() => setShowAllImages((p) => !p)}
                   variant="body1"
-                  sx={{
-                    mt: 1,
-                    cursor: "pointer",
-                    display: "flex",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    color: "text.primary",
-                  }}
+                  sx={showMoreSx}
                 >
                   {showAllImages ? "Show less" : "Show more"}
-                  {showAllImages ? (
-                    <KeyboardArrowUpIcon />
-                  ) : (
-                    <KeyboardArrowDownIcon />
-                  )}
+                  {showAllImages ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
                 </Typography>
               )}
             </Box>
-          )} */}
+          )}
 
-          {pdf_suggestions?.length > 0 && (
+          {/* ── Reference PDFs (only after content is fully shown) ─────────────────────────────*/}
+          {shouldShowMedia && normalizedPdfs.length > 0 && (
             <Box sx={{ mt: 2 }}>
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.5,
-                }}
-              >
-                <DocumentIcon
-                  size={25}
-                  color={mode == "dark" ? "#e8f1fb" : "#0f1c2e"}
-                />
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}>
+                <DocumentIcon size={25} color={mode === "dark" ? "#e8f1fb" : "#0f1c2e"} />
                 <Typography variant="h3" sx={{ color: "text.primary" }}>
                   Reference PDFs
                 </Typography>
@@ -416,131 +381,79 @@ const ChatMessage = ({
                   display: "flex",
                   gap: 2,
                   flexWrap: "wrap",
-                  maxHeight: showAllVideos ? "none" : { xs: 150, sm: 180 },
+                  maxHeight: showAllPdfs ? "none" : { xs: 155, sm: 185 },
                   overflow: "hidden",
                   py: 1,
                 }}
               >
-                {pdf_suggestions.map((pdf, i) => (
+                {normalizedPdfs.map((pdf, i) => (
                   <Box
                     key={i}
-                    sx={{
-                      position: "relative",
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
-                     width: { xs: "43%", sm: "23%" },
-                      height: { xs: 140, sm: 170 },
-                      textDecoration: "none",
-                      borderRadius: 2,
-                      p: 0.5,
-                      backgroundColor: "background.light",
-                      transition: "0.2s",
-                      border: "1px solid",
-                      borderColor: "text.caption",
-                      "&:hover": {
-                        borderColor: "primary.main",
-                        transform: "translateY(-2px)",
-                      },
-                    }}
-                    onClick={() => openPreview("pdf", pdf.Link)}
+                    sx={mediaCardSx}
+                    onClick={() => openPreview("pdf", pdf.link)}
                   >
-                    {/* PDF Thumbnail */}
                     <Box
                       sx={{
                         width: "100%",
-                        height: 130,
+                        height: { xs: 100, sm: 130 },
                         borderRadius: 1,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         backgroundColor: "background.paper",
+                        fontSize: 40,
                       }}
                     >
                       📄
                     </Box>
-
-                    {/* Title */}
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        width: "100%",
-                        textAlign: "center",
-                        color: "primary.main",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {pdf?.Title || "Reference PDF"}
+                    <Typography variant="caption" sx={mediaCaptionSx}>
+                      {pdf.title}
                     </Typography>
                   </Box>
                 ))}
               </Box>
 
-              {pdf_suggestions.length > 4 && (
+              {normalizedPdfs.length > 4 && (
                 <Typography
-                  onClick={() => setShowAllPdfs((prev) => !prev)}
+                  onClick={() => setShowAllPdfs((p) => !p)}
                   variant="body1"
-                  sx={{
-                    mt: 1,
-                    cursor: "pointer",
-                    display: "flex",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    color: "text.primary",
-                  }}
+                  sx={showMoreSx}
                 >
                   {showAllPdfs ? "Show less" : "Show more"}
-                  {showAllPdfs ? (
-                    <KeyboardArrowUpIcon />
-                  ) : (
-                    <KeyboardArrowDownIcon />
-                  )}
+                  {showAllPdfs ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
                 </Typography>
               )}
             </Box>
           )}
 
-          {msg.question_suggestions?.length > 0 && (
-            <Box
-              sx={{ mt: 2, display: "flex", flexDirection: "column", gap: 1 }}
-            >
+          {/* ── Follow-up question suggestions (only after content is fully shown) ──────────────────────────────*/}
+          {shouldShowQuestions && (
+            <Box sx={{ mt: 2, display: "flex", flexDirection: "column", gap: 1 }}>
               <Typography
                 variant="body1"
-                sx={{
-                  color: "text.primary",
-                  fontWeight: 600,
-                  letterSpacing: "0.08em",
-                }}
+                sx={{ color: "text.primary", fontWeight: 600, letterSpacing: "0.08em" }}
               >
                 Try asking...
               </Typography>
               <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                {" "}
-                {msg.question_suggestions.map((q, i) => (
+                {questionSuggestions.map((q, i) => (
                   <Box
                     key={i}
                     sx={(theme) => ({
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "space-between",
-                      width: "auto",
                       p: 1,
                       borderRadius: 3,
                       backgroundColor: "background.light",
                       cursor: "pointer",
                       transition: "all 0.2s ease",
-
+                      border: "1.5px solid transparent",
                       "&:hover": {
-                        border: "1.5px solid",
                         borderColor: theme.palette.primary.main,
                         color: theme.palette.primary.main,
                       },
                     })}
-                    onClick={() => {
-                      handleFollowUpQuestion(q);
-                    }}
+                    onClick={() => handleFollowUpQuestion(q)}
                   >
                     <Typography variant="body2">{q}</Typography>
                   </Box>
@@ -550,6 +463,7 @@ const ChatMessage = ({
           )}
         </Box>
       </Box>
+
       <MediaPreviewModal
         open={previewMedia.open}
         type={previewMedia.type}
