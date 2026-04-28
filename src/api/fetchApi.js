@@ -537,7 +537,8 @@
 // // NO axios (buffers full response)
 // // NO flushSync (causes jank)
 // // NO artificial delays
-// // ─────────────────────────────────────────────────────────────
+
+
 // export const sendMessage = async (
 //   sessionId,
 //   messageText,
@@ -1057,5 +1058,130 @@ export const deleteSession = async (sessionId) => {
 //   };
 
 //   // 🔥 Return manual cleanup (important)
+//   return cleanup;
+// };
+
+
+
+// export const sendMessage = (
+//   sessionId,
+//   messageText,
+//   signal,
+//   {
+//     onRewriteToken,       // ← NEW
+//     onRewriteDone,        // ← NEW
+//     onUnderstandingToken, // ← NEW
+//     onUnderstandingDone,  // ← NEW
+//     onContentToken,
+//     onContentDone,        // ← NEW
+//     onSuggestions,
+//     onMedia,
+//     onError,
+//     onDone,
+//   } = {}
+// ) => {
+//   const userId = localStorage.getItem("user_id");
+
+//   const url = new URL(`${APP_URL}/chat/stream`);
+//   url.searchParams.append("message", messageText);
+//   url.searchParams.append("session_id", sessionId);
+//   url.searchParams.append("user_id", userId);
+
+//   let isClosed = false;
+
+//   const eventSource = new EventSource(url.toString(), {
+//     withCredentials: true,
+//   });
+
+//   const cleanup = () => {
+//     if (!isClosed) {
+//       isClosed = true;
+//       eventSource.close();
+//     }
+//   };
+
+//   if (signal) {
+//     signal.addEventListener("abort", cleanup);
+//   }
+
+//   eventSource.onmessage = (event) => {
+//     if (!event?.data) return;
+
+//     let data;
+//     try {
+//       data = JSON.parse(event.data);
+//     } catch (err) {
+//       console.warn("Invalid JSON chunk:", event.data);
+//       return;
+//     }
+
+//     switch (data.type) {
+//       // ── Rewrite phase ──────────────────────────────
+//       case "rewrite_token":
+//         onRewriteToken?.(data.token ?? "");
+//         break;
+
+//       case "rewrite_done":
+//         onRewriteDone?.();
+//         break;
+
+//       // ── Understanding phase ────────────────────────
+//       case "understanding_token":
+//         onUnderstandingToken?.(data.token ?? "");
+//         break;
+
+//       case "understanding_done":
+//         onUnderstandingDone?.();
+//         break;
+
+//       // ── Main content phase ─────────────────────────
+//       case "content":
+//         onContentToken?.(data.token ?? "");
+//         break;
+
+//       case "content_done":
+//         onContentDone?.();
+//         break;
+
+//       // ── Metadata ───────────────────────────────────
+//       case "suggestions":
+//         onSuggestions?.(data.question_suggestions ?? []);
+//         break;
+
+//       case "media":
+//         onMedia?.({
+//           videos: data.videos ?? [],
+//           images: data.images ?? [],
+//           pdfs: data.pdfs ?? [],
+//         });
+//         break;
+
+//       case "done":
+//         onDone?.();
+//         cleanup();
+//         break;
+
+//       case "error":
+//         onError?.(data.message ?? "Unknown error");
+//         cleanup();
+//         break;
+
+//       default:
+//         break;
+//     }
+//   };
+
+//   eventSource.onerror = (err) => {
+//     console.error("SSE error:", err);
+//     if (eventSource.readyState === 2) {
+//       onError?.("Stream closed unexpectedly");
+//       cleanup();
+//     }
+//   };
+
+//   eventSource.onopen = () => {
+//     console.log("SSE connected");
+//   };
+
 //   return cleanup;
 // };

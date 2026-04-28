@@ -217,7 +217,7 @@ const ChatMessage = ({
           </Box>
         )}
 
-        {/* ── Bubble ──────────────────────────────────────────────────────── */}
+        {/* ── Bubble */}
         <Box
           sx={{
             bgcolor: isUser ? "background.light" : "background.chatbackground",
@@ -313,59 +313,6 @@ const ChatMessage = ({
               )}
             </Box>
           )}
-
-          {/* ── Reference Images (only after content is fully shown) ────────────────────────────*/}
-          {shouldShowMedia && normalizedImages.length > 0 && (
-            <Box sx={{ mt: 2 }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}>
-                <ImageIcon size={24} color={mode === "dark" ? "#e8f1fb" : "#0f1c2e"} />
-                <Typography variant="h3" sx={{ color: "text.primary" }}>
-                  Reference Images
-                </Typography>
-              </Box>
-
-              <Box
-                sx={{
-                  display: "flex",
-                  gap: 2,
-                  flexWrap: "wrap",
-                  maxHeight: showAllImages ? "none" : { xs: 155, sm: 185 },
-                  overflow: "hidden",
-                  py: 1,
-                }}
-              >
-                {normalizedImages.map((img, i) => (
-                  <Box
-                    key={i}
-                    sx={mediaCardSx}
-                    onClick={() => openPreview("image", img.url)}
-                  >
-                    <Box
-                      component="img"
-                      src={img.thumbnail}
-                      alt={img.title}
-                      sx={mediaThumbnailSx}
-                    />
-                    <Typography variant="caption" sx={mediaCaptionSx}>
-                      {img.title}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-
-              {normalizedImages.length > 4 && (
-                <Typography
-                  onClick={() => setShowAllImages((p) => !p)}
-                  variant="body1"
-                  sx={showMoreSx}
-                >
-                  {showAllImages ? "Show less" : "Show more"}
-                  {showAllImages ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-                </Typography>
-              )}
-            </Box>
-          )}
-
           {/* ── Reference PDFs (only after content is fully shown) ─────────────────────────────*/}
           {shouldShowMedia && normalizedPdfs.length > 0 && (
             <Box sx={{ mt: 2 }}>

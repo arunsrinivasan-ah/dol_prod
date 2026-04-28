@@ -1,4 +1,3 @@
-// ChatWindow.jsx
 import {
   Box,
   Typography,
@@ -89,8 +88,6 @@ const ChatWindow = ({
     message: "",
     isError: false,
   });
-
-  // ── Accumulator ref ───────────────────────────────────────────────────────
   const accRef = useRef({
     content: "",
     suggestions: [],
@@ -177,8 +174,6 @@ const ChatWindow = ({
 
     const messageText = (queryOverride ?? searchQuery).trim();
     if (!messageText) return;
-
-    // ── Reset accumulator ──────────────────────────────────────────────────
     isStoppedRef.current = false;
     accRef.current = {
       content: "",
@@ -197,12 +192,9 @@ const ChatWindow = ({
     setDisableNewChat(true);
     setAutoScrollEnabled(true);
     userScrolledRef.current = false;
-
-    // Activate live message area (shows thinking bubble)
     setLiveMessage({ ...EMPTY_LIVE, active: true });
 
     try {
-      // ── Ensure session ────────────────────────────────────────────────────
       const sessionId = currentSessionId
         ? await ensureSession(currentSessionId)
         : await ensureSession();
@@ -215,8 +207,6 @@ const ChatWindow = ({
       }
 
       abortControllerRef.current = new AbortController();
-
-      // ── Start SSE stream ──────────────────────────────────────────────────
       await sendMessage(
         sessionId,
         messageText,
@@ -269,8 +259,6 @@ const ChatWindow = ({
             setIsStreaming(false);
             setDisableNewChat(false);
           },
-
-          // Stream complete — commit live message into the messages array
           onDone: () => {
             if (isStoppedRef.current) return;
             const acc = accRef.current;
@@ -340,19 +328,12 @@ const ChatWindow = ({
           message: "Chat saved successfully",
           isError: false,
         });
-
-        //  THIS IS THE REAL FIX
-        //  immediate UI update + backend sync
         await fetchSessions?.();
-
-        //  FORCE REFRESH using saved API
         const savedRes = await getSavedSessions();
-
         const savedIds = new Set(
           (savedRes.saved_sessions || []).map((s) => s.session_id)
         );
 
-        //  Update sessionData manually (IMPORTANT)
         fetchSessions?.(undefined, (prevSessions) =>
           prevSessions.map((s) => ({
             ...s,
@@ -427,7 +408,7 @@ const ChatWindow = ({
         flexDirection: "column",
       }}
     >
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      {/* Header */}
       <Box
         sx={{
           display: "flex",
@@ -480,14 +461,9 @@ const ChatWindow = ({
             {isCurrentSaved ? "Saved Chat" : "Save Chat"}
           </Typography>
         </Box>
-
-        {/* <Box sx={{ display: "flex", alignItems: "center", gap: 1, cursor: "pointer" }}>
-          <Saveoutlined size={22} color={mode === "dark" ? "#1cb0f6" : "#106BA3"} />
-          <Typography variant="body1" onClick={handleSaveChat} sx={{ color: "text.primary" }}>Save Chat</Typography>
-        </Box> */}
       </Box>
 
-      {/* ── Message list */}
+      {/* Message list */}
       {showWelcome ? (
         <WelcomeChatScreen handleSend={handleSend} setSearchQuery={setSearchQuery} />
       ) : (
@@ -512,7 +488,7 @@ const ChatWindow = ({
             gap: 2,
           }}
         >
-          {/* ── Committed messages ──────────────────────────────────────────── */}
+          {/*  Committed messages */}
           {messages?.map((msg, index) => (
             <ChatMessage
               key={index}
@@ -526,7 +502,7 @@ const ChatWindow = ({
             />
           ))}
 
-          {/* ── Live streaming area ─────────────────────────────────────────── */}
+          {/*  Live streaming area  */}
           {liveMessage.active && (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
 
@@ -559,7 +535,7 @@ const ChatWindow = ({
         </Box>
       )}
 
-      {/* ── Input bar ──────────────────────────────────────────────────────── */}
+      {/*Input bar */}
       <Box
         sx={{
           px: { xs: 1, sm: 4, md: 7 },
@@ -673,15 +649,15 @@ const ChatWindow = ({
         fullWidth
         BackdropProps={{
           sx: {
-            backdropFilter: "blur(6px)",   //  blur background
-            backgroundColor: "rgba(0,0,0,0.2)", // optional dark overlay
+            backdropFilter: "blur(6px)",
+            backgroundColor: "rgba(0,0,0,0.2)",
           },
         }}
         PaperProps={{
           sx: {
             borderRadius: 3,
-            backdropFilter: "blur(10px)",  //  glass effect on dialog
-            background: "rgba(255, 255, 255, 0.8)", // light glass
+            backdropFilter: "blur(10px)",
+            background: "rgba(255, 255, 255, 0.8)",
           },
         }}
       >
@@ -696,14 +672,14 @@ const ChatWindow = ({
             textAlign: "center",
           }}
         >
-          {/* ✅ Icon */}
+          {/* Icon */}
           {saveDialog.isError ? (
             <ErrorIcon sx={{ fontSize: 50, color: "error.main", mb: 1 }} />
           ) : (
             <CheckCircleIcon sx={{ fontSize: 50, color: "#1cb0f6", mb: 1 }} />
           )}
 
-          {/* ✅ Message */}
+          {/*  Message */}
           <Typography
             variant="body1"
             sx={{
@@ -716,7 +692,7 @@ const ChatWindow = ({
           </Typography>
         </DialogContent>
 
-        {/* ✅ Square Button */}
+        {/*  Square Button */}
         <DialogActions sx={{ justifyContent: "center", pb: 3 }}>
           <Button
             onClick={() => setSaveDialog({ ...saveDialog, open: false })}
@@ -724,7 +700,7 @@ const ChatWindow = ({
             sx={{
               width: 100,
               height: 40,
-              borderRadius: 1,   // 🔥 square shape
+              borderRadius: 1,
               textTransform: "none",
               fontWeight: 600,
             }}
