@@ -38,7 +38,7 @@ function App() {
   }
 
   return userId ? (
-    <Router basename="/dolphin-rb/ui">
+    <Router basename="/">
       <Routes>
         <Route path="/" element={<Chatpage userId={userId} onLogout={handleLogout} />} />
         <Route path="/admin" element={<AdminPage onLogout={handleLogout} />}>
