@@ -5,9 +5,7 @@ import {
   TextField,
   Typography,
   Skeleton,
-  Avatar,
   Button,
-  IconButton,
   Tabs,
   Tab,
   Dialog,
@@ -18,29 +16,24 @@ import {
 } from "@mui/material";
 import React, { useEffect, useState, useMemo } from "react";
 import { ChatItem } from "./ChatItem";
-import LightModeIcon from "@mui/icons-material/LightMode";
 import { useThemeMode } from "../../context/ThemeModeContext";
-import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
 import { Message } from "../../assets/svgIcons/message";
 import { SaveIcon } from "../../assets/svgIcons/Saveicon";
 import { Search } from "../../assets/svgIcons/Search";
-import { FilterIcon } from "../../assets/svgIcons/FilterIcon";
 import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import { getSidebarWidth } from "../../theme/layoutScale";
 import { getSavedSessions } from "../../api/fetchApi";
 
 const ChatSideBar = ({
   sessionData,
-  activeIndex,
   setActiveIndex,
   selectSession,
   loading,
-  sidebarOpen,
   setSidebarOpen,
   fetchSessions,
   currentSessionId,
 }) => {
-  const { mode, toggleMode } = useThemeMode();
+  const { mode } = useThemeMode();
   const [valueTab, setValueTab] = useState(0);
   const [openFilter, setOpenFilter] = useState(false);
   const [filterValue, setFilterValue] = useState("pinned");
@@ -48,6 +41,22 @@ const ChatSideBar = ({
   const [savedSessions, setSavedSessions] = useState([]);
   const [savedLoading, setSavedLoading] = useState(false);
   const [localSessions, setLocalSessions] = useState(sessionData || []);
+  const [pinnedSessions, setPinnedSessions] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("pinned_sessions") || "[]");
+    } catch {
+      return [];
+    }
+  });
+
+  const handleTogglePin = (id) => {
+    setPinnedSessions((prev) => {
+      const isPinned = prev.includes(id);
+      const newPinned = isPinned ? prev.filter((p) => p !== id) : [...prev, id];
+      localStorage.setItem("pinned_sessions", JSON.stringify(newPinned));
+      return newPinned;
+    });
+  };
 
   // Fetch saved sessions when tab changes to Saved Chats
   useEffect(() => {
@@ -56,20 +65,16 @@ const ChatSideBar = ({
     }
   }, [valueTab]);
 
-useEffect(() => {
-  setLocalSessions((prev) => {
-    return (sessionData || []).map((apiChat) => {
-      const local = prev.find(
-        (s) => s.session_id === apiChat.session_id
-      );
+  useEffect(() => {
+    setLocalSessions((prev) => {
+      return (sessionData || []).map((apiChat) => {
+        const local = prev.find((s) => s.session_id === apiChat.session_id);
 
-      // ✅ keep local is_saved if exists
-      return local
-        ? { ...apiChat, is_saved: local.is_saved }
-        : apiChat;
+        //  keep local is_saved if exists
+        return local ? { ...apiChat, is_saved: local.is_saved } : apiChat;
+      });
     });
-  });
-}, [sessionData]);
+  }, [sessionData]);
 
   const handleToggleSave = (id, newStatus) => {
     const chat = localSessions.find((s) => s.session_id === id);
@@ -77,8 +82,8 @@ useEffect(() => {
     // update My Chats
     setLocalSessions((prev) =>
       prev.map((s) =>
-        s.session_id === id ? { ...s, is_saved: newStatus } : s
-      )
+        s.session_id === id ? { ...s, is_saved: newStatus } : s,
+      ),
     );
 
     // update Saved Chats
@@ -89,9 +94,7 @@ useEffect(() => {
         return chat ? [{ ...chat, is_saved: true }, ...prev] : prev;
       });
     } else {
-      setSavedSessions((prev) =>
-        prev.filter((s) => s.session_id !== id)
-      );
+      setSavedSessions((prev) => prev.filter((s) => s.session_id !== id));
     }
   };
 
@@ -165,31 +168,34 @@ useEffect(() => {
   // Group sessions by date
   const groupedSessions = useMemo(() => {
     if (!displaySessions || !displaySessions.length) {
-      return { today: [], yesterday: [], older: [] };
+      return { pinned: [], today: [], yesterday: [], older: [] };
     }
 
     const groups = {
+      pinned: [],
       today: [],
       yesterday: [],
-      older: []
+      older: [],
     };
 
     displaySessions.forEach((chat, index) => {
       const dateField = chat.updated_at || chat.created_at || chat.timestamp;
+      const chatWithIndex = { ...chat, originalIndex: index };
 
-      if (isToday(dateField)) {
-        groups.today.push({ ...chat, originalIndex: index });
+      if (pinnedSessions.includes(chat.session_id)) {
+        groups.pinned.push(chatWithIndex);
+      } else if (isToday(dateField)) {
+        groups.today.push(chatWithIndex);
       } else if (isYesterday(dateField)) {
-        groups.yesterday.push({ ...chat, originalIndex: index });
+        groups.yesterday.push(chatWithIndex);
       } else {
-        groups.older.push({ ...chat, originalIndex: index });
+        groups.older.push(chatWithIndex);
       }
     });
 
     return groups;
-  }, [displaySessions]);
+  }, [displaySessions, pinnedSessions]);
 
-  const userData = JSON.parse(localStorage.getItem("userData") || "{}");
   const { fontLevel } = useThemeMode();
 
   const isLoading = valueTab === 1 ? savedLoading : loading;
@@ -294,7 +300,7 @@ useEffect(() => {
             bgcolor: "background.grey",
             border: "none",
             height: 35,
-            width: "85%",
+            width: "100%",
             borderRadius: 2,
             "& .MuiOutlinedInput-root": {
               height: 35,
@@ -326,27 +332,6 @@ useEffect(() => {
             },
           }}
         />
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            height: 35,
-            width: 35,
-            borderRadius: 2,
-            bgcolor: "background.grey",
-            cursor: "pointer",
-          }}
-          onClick={() => {
-            setSidebarOpen(false);
-            setOpenFilter(true);
-          }}
-        >
-          <FilterIcon
-            size={20}
-            color={mode == "dark" ? "#1cb0f6" : "#106BA3"}
-          />
-        </Box>
       </Box>
 
       <Typography variant={"body2"} sx={{ mb: 1, color: "text.smallheading" }}>
@@ -416,6 +401,64 @@ useEffect(() => {
           </Box>
         ) : displaySessions && displaySessions.length ? (
           <>
+            {groupedSessions.pinned.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    fontWeight: 600,
+                    mb: 1,
+                    display: "block",
+                    fontSize: 11,
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  PINNED
+                </Typography>
+                <Stack spacing={1}>
+                  {groupedSessions.pinned.map((chat) => (
+                    <ChatItem
+                      key={chat.session_id || chat.originalIndex}
+                      title={chat.title}
+                      tabType={valueTab}
+                      isSaved={chat.is_saved}
+                      onSave={(chat) => {
+                        setSavedSessions((prev) => {
+                          const exists = prev.some(
+                            (s) => s.session_id === chat.session_id,
+                          );
+                          if (exists) return prev;
+                          return [chat, ...prev];
+                        });
+                      }}
+                      onToggleSave={handleToggleSave}
+                      active={chat.session_id === currentSessionId}
+                      sessionId={chat.session_id}
+                      isPinned={true}
+                      onTogglePin={handleTogglePin}
+                      onDelete={(id) => {
+                        if (valueTab === 1) {
+                          setSavedSessions((prev) =>
+                            prev.filter((s) => s.session_id !== id),
+                          );
+                        } else {
+                          setLocalSessions((prev) =>
+                            prev.filter((s) => s.session_id !== id),
+                          );
+                        }
+                      }}
+                      onClick={() => {
+                        setActiveIndex(chat.originalIndex);
+                        selectSession(chat.session_id);
+                        setSidebarOpen(false);
+                      }}
+                    />
+                  ))}
+                </Stack>
+              </Box>
+            )}
+
             {groupedSessions.today.length > 0 && (
               <Box sx={{ mb: 2 }}>
                 <Typography
@@ -442,29 +485,28 @@ useEffect(() => {
                         // ✅ update saved tab
                         setSavedSessions((prev) => {
                           const exists = prev.some(
-                            (s) => s.session_id === chat.session_id
+                            (s) => s.session_id === chat.session_id,
                           );
                           if (exists) return prev;
                           return [chat, ...prev];
                         });
                       }}
-
                       onToggleSave={handleToggleSave}
-
                       onUpdateSession={(id, updates) => {
-                        // ✅ update My Chats tab
                         // fetchSessions(); // OR better: update local state if you store it
                       }}
                       active={chat.session_id === currentSessionId}
-                      sessionId={chat.session_id}   // ✅ ADD THIS
+                      sessionId={chat.session_id}
+                      isPinned={false}
+                      onTogglePin={handleTogglePin}
                       onDelete={(id) => {
                         if (valueTab === 1) {
                           setSavedSessions((prev) =>
-                            prev.filter((s) => s.session_id !== id)
+                            prev.filter((s) => s.session_id !== id),
                           );
                         } else {
                           setLocalSessions((prev) =>
-                            prev.filter((s) => s.session_id !== id)
+                            prev.filter((s) => s.session_id !== id),
                           );
                         }
                       }}
@@ -500,34 +542,34 @@ useEffect(() => {
                       key={chat.session_id || chat.originalIndex}
                       title={chat.title}
                       tabType={valueTab}
-
                       isSaved={chat.is_saved}
                       onToggleSave={handleToggleSave}
                       onSave={(chat) => {
                         // ✅ update saved tab
                         setSavedSessions((prev) => {
                           const exists = prev.some(
-                            (s) => s.session_id === chat.session_id
+                            (s) => s.session_id === chat.session_id,
                           );
                           if (exists) return prev;
                           return [chat, ...prev];
                         });
                       }}
-
                       onUpdateSession={(id, updates) => {
                         // ✅ update My Chats tab
                         // fetchSessions(); // OR better: update local state if you store it
                       }}
                       active={chat.session_id === currentSessionId}
-                      sessionId={chat.session_id}   // ✅ ADD THIS
+                      sessionId={chat.session_id} // ✅ ADD THIS
+                      isPinned={false}
+                      onTogglePin={handleTogglePin}
                       onDelete={(id) => {
                         if (valueTab === 1) {
                           setSavedSessions((prev) =>
-                            prev.filter((s) => s.session_id !== id)
+                            prev.filter((s) => s.session_id !== id),
                           );
                         } else {
                           setLocalSessions((prev) =>
-                            prev.filter((s) => s.session_id !== id)
+                            prev.filter((s) => s.session_id !== id),
                           );
                         }
                       }}
@@ -566,24 +608,25 @@ useEffect(() => {
                       isSaved={chat.is_saved}
                       onToggleSave={handleToggleSave}
                       onSave={(chat) => {
-                        // ✅ update saved tab
+                        //  update saved tab
                         setSavedSessions((prev) => {
                           const exists = prev.some(
-                            (s) => s.session_id === chat.session_id
+                            (s) => s.session_id === chat.session_id,
                           );
                           if (exists) return prev;
                           return [chat, ...prev];
                         });
                       }}
-
+                      isPinned={false}
+                      onTogglePin={handleTogglePin}
                       onDelete={(id) => {
                         if (valueTab === 1) {
                           setSavedSessions((prev) =>
-                            prev.filter((s) => s.session_id !== id)
+                            prev.filter((s) => s.session_id !== id),
                           );
                         } else {
                           setLocalSessions((prev) =>
-                            prev.filter((s) => s.session_id !== id)
+                            prev.filter((s) => s.session_id !== id),
                           );
                         }
                       }}
@@ -610,41 +653,6 @@ useEffect(() => {
           </Typography>
         )}
       </Box>
-
-      <Box sx={{ display: "flex", alignItems: "center" }}>
-        <Avatar sx={{ width: 35, height: 35, bgcolor: "primary.main" }} />
-        <Box
-          sx={{ display: "flex", flexDirection: "column", width: "70%", pl: 1 }}
-        >
-          <Typography variant="body1" color="primary.main">
-            {userData?.name
-              ? userData.name.charAt(0).toUpperCase() + userData.name.slice(1)
-              : ""}
-          </Typography>
-          <Typography variant="caption" color="primary.main" fontWeight={500}>
-            {userData?.email || ""}{" "}
-          </Typography>
-        </Box>
-        <IconButton
-          onClick={toggleMode}
-          sx={{
-            width: 35,
-            height: 35,
-            background: "linear-gradient(180deg, #1187D6 0%, #2F428D 100%)",
-            padding: 2,
-            "&:hover": {
-              bgcolor: "primary.main",
-            },
-          }}
-        >
-          {mode === "dark" ? (
-            <DarkModeOutlinedIcon sx={{ color: "text.primary" }} />
-          ) : (
-            <LightModeIcon sx={{ color: "background.default" }} />
-          )}
-        </IconButton>
-      </Box>
-
       <Dialog
         open={openFilter}
         sx={{

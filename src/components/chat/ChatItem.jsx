@@ -1,20 +1,28 @@
 import { Box, Menu, MenuItem, Typography, useTheme } from "@mui/material";
-import ChatIcon from "@mui/icons-material/Chat";
 import { Message } from "../../assets/svgIcons/message";
-import { useThemeMode } from "../../context/ThemeModeContext";
-import { Pin } from "../../assets/svgIcons/Pin";
 import { Threedot } from "../../assets/svgIcons/ThreeDots";
 import { useState } from "react";
 import { DeleteIcon } from "../../assets/svgIcons/DeleteIcon";
 import { deleteSession } from "../../api/fetchApi";
 import ActionDialog from "./ActionDialog";
 import { saveSession } from "../../api/fetchApi";
-import SaveAltIcon from '@mui/icons-material/SaveAlt';
-import DoDisturbAltIcon from '@mui/icons-material/DoDisturbAlt';
+import SaveAltIcon from "@mui/icons-material/SaveAlt";
+import DoDisturbAltIcon from "@mui/icons-material/DoDisturbAlt";
+import { Pin } from "../../assets/svgIcons/Pin";
 
-export const ChatItem = ({ title, active, onClick, sessionId, onDelete, tabType, onSave, isSaved, onUpdateSession, onToggleSave }) => {
+export const ChatItem = ({
+  title,
+  active,
+  onClick,
+  sessionId,
+  onDelete,
+  tabType,
+  isSaved,
+  onToggleSave,
+  isPinned,
+  onTogglePin,
+}) => {
   const theme = useTheme();
-  const { mode } = useThemeMode();
   const [anchorEl, setAnchorEl] = useState(null);
 
   const open = Boolean(anchorEl);
@@ -54,14 +62,11 @@ export const ChatItem = ({ title, active, onClick, sessionId, onDelete, tabType,
     }
   };
 
-  const [valueTab, setValueTab] = useState(0);
-
   const [dialog, setDialog] = useState({
     open: false,
     mode: "confirm",
     message: "",
   });
-
 
   const handleDeleteClick = (e) => {
     e.stopPropagation();
@@ -116,22 +121,19 @@ export const ChatItem = ({ title, active, onClick, sessionId, onDelete, tabType,
       </Box>
 
       <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
-        {/* <Box
-          sx={{
-            width: 22,
-            height: 22,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: "50%",
-            cursor: "pointer",
-            "&:hover": {
-              bgcolor: "text.placeholder1",
-            },
-          }}
-        >
-          <Pin size={16} color={"#FFAE00"} />
-        </Box> */}
+        {isPinned && (
+          <Box
+            sx={{
+              width: 22,
+              height: 22,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Pin size={16} color={"#FFAE00"} />
+          </Box>
+        )}
         <Box
           sx={{
             width: 22,
@@ -166,7 +168,6 @@ export const ChatItem = ({ title, active, onClick, sessionId, onDelete, tabType,
             },
           }}
         >
-
           {/* ✅ ONLY FOR SAVED TAB */}
           {tabType === 1 && (
             <MenuItem
@@ -203,12 +204,31 @@ export const ChatItem = ({ title, active, onClick, sessionId, onDelete, tabType,
             </MenuItem>
           )}
 
+          {/* ✅ PIN OPTION */}
+          <MenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              handleMenuClose();
+              onTogglePin?.(sessionId);
+            }}
+            sx={{ display: "flex", gap: 1 }}
+          >
+            {isPinned ? (
+              <DoDisturbAltIcon sx={{ fontSize: 18 }} />
+            ) : (
+              <Pin size={18} color={theme.palette.text.primary} />
+            )}
+            {isPinned ? "Unpin Chat" : "Pin Chat"}
+          </MenuItem>
+
           {/* ✅ ALWAYS SHOW DELETE */}
-          <MenuItem sx={{ display: "flex", gap: 1 }} onClick={handleDeleteClick}>
+          <MenuItem
+            sx={{ display: "flex", gap: 1 }}
+            onClick={handleDeleteClick}
+          >
             <DeleteIcon size={18} color={theme.palette.text.primary} />
             Delete
           </MenuItem>
-
         </Menu>
       </Box>
 

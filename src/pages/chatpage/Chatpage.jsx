@@ -1,10 +1,11 @@
-import { Grid, useMediaQuery, useTheme } from "@mui/material";
+import { useMediaQuery, useTheme } from "@mui/material";
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import ChatSideBar from "../../components/chat/ChatSideBar";
 import ChatWindow from "../../components/chat/ChatWindow";
 import { fetchHealth } from "../../api/fetchApi";
 import axios from "axios";
 import Header from "../../components/header/Header";
+import MainLayout from "../../layouts/MainLayout";
 
 const APP_URL = process.env.REACT_APP_BASE_URL;
 
@@ -18,16 +19,17 @@ const Chatpage = ({ userId, setUserId, onLogout }) => {
   const [messages, setmessages] = useState([]);
   const [disableNewChat, setDisableNewChat] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   const fetchInProgressRef = useRef(false);
   const initialLoadRef = useRef(false);
 
-  const fetchSessions = useCallback(async (searchTerm = "") => {
+  const fetchSessions = useCallback(async (searchTerm = "", isBackground = false) => {
     if (fetchInProgressRef.current) return;
 
     try {
       fetchInProgressRef.current = true;
-      setSessionsLoading(true);
+      if (!isBackground) setSessionsLoading(true);
 
       const userId = localStorage.getItem("user_id");
 
@@ -52,7 +54,7 @@ const Chatpage = ({ userId, setUserId, onLogout }) => {
     } catch (error) {
       console.error("Unable to fetch sessions");
     } finally {
-      setSessionsLoading(false);
+      if (!isBackground) setSessionsLoading(false);
       fetchInProgressRef.current = false;
     }
   }, []);
@@ -75,6 +77,9 @@ const Chatpage = ({ userId, setUserId, onLogout }) => {
       setCurrentSessionId(data.session_id);
       setCurrentSessionData(data);
       setmessages(data.messages || []);
+
+      // Persist session ID for refresh
+      localStorage.setItem("active_session_id", data.session_id);
     } catch (error) {
       console.error("Unable to load session");
     } finally {
@@ -84,19 +89,26 @@ const Chatpage = ({ userId, setUserId, onLogout }) => {
 
   useEffect(() => {
     if (initialLoadRef.current) return;
+    initialLoadRef.current = true;
 
     const loadHealth = async () => {
       const health = await fetchHealth();
       if (health) {
         await fetchSessions();
-        initialLoadRef.current = true;
+
+        // Auto-load last active session
+        const lastSessionId = localStorage.getItem("active_session_id");
+        if (lastSessionId) {
+          await selectSession(lastSessionId);
+        }
       } else {
         setUserId(null);
       }
+      setIsInitializing(false);
     };
 
     loadHealth();
-  }, [fetchSessions, setUserId]);
+  }, [fetchSessions, setUserId, selectSession]);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -121,17 +133,18 @@ const Chatpage = ({ userId, setUserId, onLogout }) => {
     currentSessionId,
     setCurrentSessionId,
     activeIndex,
-    loading: sessionDetailsLoading,
+    loading: sessionDetailsLoading || isInitializing,
     fetchSessions,
     messages,
     setmessages,
     setDisableNewChat,
     setActiveIndex,
-  }), [currentSessionData, currentSessionId, activeIndex, sessionDetailsLoading, fetchSessions, messages, setmessages, setActiveIndex]);
+    selectSession,
+  }), [currentSessionData, currentSessionId, activeIndex, sessionDetailsLoading, isInitializing, fetchSessions, messages, setmessages, setActiveIndex, selectSession]);
 
   return (
-    <Grid container height="100vh" width="100vw" flexDirection="column">
-      <Grid item xs={12} sx={{ height: "10vh" }}>
+    <MainLayout
+      header={
         <Header
           onLogout={onLogout}
           setSessionData={setSessionData}
@@ -148,16 +161,10 @@ const Chatpage = ({ userId, setUserId, onLogout }) => {
           setSidebarOpen={setSidebarOpen}
           fetchSessions={fetchSessions}
         />
-      </Grid>
-
-      <Grid item xs={12} sx={{ height: "90vh", display: "flex" }}>
-        {!isMobile && !isTab && (
-          <ChatSideBar {...sidebarProps} />
-        )}
-
-        <ChatWindow {...chatWindowProps} />
-      </Grid>
-    </Grid>
+      }
+      leftPanel={<ChatSideBar {...sidebarProps} />}
+      contentPanel={<ChatWindow {...chatWindowProps} />}
+    />
   );
 };
 

@@ -16,13 +16,19 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  Avatar,
+  Tooltip,
+
 } from "@mui/material";
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import MenuIcon from "@mui/icons-material/Menu";
-import TextFieldsIcon from "@mui/icons-material/TextFields";
+import AccountCircleOutlinedIcon from "@mui/icons-material/AccountCircleOutlined";
+import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
+import HistoryIcon from "@mui/icons-material/History";
 
 import DolphinIconB from "../../assets/images/dolphin_b.png";
 import DolphinIconW from "../../assets/images/dolphin_w.png";
@@ -52,8 +58,10 @@ const Header = ({
   setSidebarOpen,
   fetchSessions,
   savedSessions,
+  drawerContent,
 }) => {
   const theme = useTheme();
+  const navigate = useNavigate();
   const { mode, toggleMode } = useThemeMode();
 
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -61,6 +69,9 @@ const Header = ({
 
   const [anchorElFont, setAnchorElFont] = useState(null);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [settingsView, setSettingsView] = useState("general");
+  const userData = JSON.parse(localStorage.getItem("userData") || "{}");
+  const profile = userData.user_profile || userData;
 
   const { fontLevel, setFontLevel } = useThemeMode();
 
@@ -70,10 +81,12 @@ const Header = ({
 
   const openFontMenu = Boolean(anchorElFont);
   const handleCreateNewSession = async () => {
-    setCurrentSessionData(null); 
-    setActiveIndex(null);
-    setCurrentSessionId(null);
-    setmessages([]);
+    if (setCurrentSessionData) setCurrentSessionData(null);
+    if (setActiveIndex) setActiveIndex(null);
+    if (setCurrentSessionId) setCurrentSessionId(null);
+    if (setmessages) setmessages([]);
+    localStorage.removeItem("active_session_id");
+    navigate("/");
   };
 
   // Handle logout button click - open confirmation dialog
@@ -84,7 +97,7 @@ const Header = ({
   // Handle confirm logout
   const handleConfirmLogout = () => {
     setLogoutDialogOpen(false);
-    onLogout(); 
+    onLogout();
   };
 
   // Handle cancel logout
@@ -92,9 +105,20 @@ const Header = ({
     setLogoutDialogOpen(false);
   };
 
+  // const handleDummyClick = async () => {
+  //   try {
+  //     await newSession((chunk) => {
+  //       //  Do nothing with UI
+  //       console.log("Streaming chunk:", chunk);
+  //     });
+  //   } catch (err) {
+  //     console.error("Streaming error:", err);
+  //   }
+  // };
+
   return (
     <>
-      {/* ================= HEADER ================= */}
+      {/* == HEADER == */}
       <AppBar
         position="static"
         elevation={0}
@@ -119,7 +143,7 @@ const Header = ({
             gap={{ xs: 1.5, sm: 2, md: 3.5 }}
           >
             {(isMobile || isTablet) && (
-              <IconButton onClick={() => setSidebarOpen(true)}>
+              <IconButton onClick={() => setSidebarOpen && setSidebarOpen(true)}>
                 <MenuIcon sx={{ color: "text.primary" }} />
               </IconButton>
             )}
@@ -177,22 +201,8 @@ const Header = ({
               </Box>
             )}
 
-            {/* Connection */}
-            <Box display="flex" alignItems="center" gap={1}>
-              <Box
-                sx={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  backgroundColor: "#22c55e",
-                }}
-              />
-              {!isMobile && (
-                <Typography variant="body2" color="text.secondary">
-                  Connected
-                </Typography>
-              )}
-            </Box>
+            {/* Connection Status */}
+
           </Box>
 
           <Stack
@@ -224,21 +234,30 @@ const Header = ({
               {isMobile && <AddRoundedIcon />}
             </Button>
 
-            {/* Settings */}
-            <Button
-              startIcon={
-                <SettingsOutlinedIcon sx={{ color: "text.primary" }} />
-              }
-              onClick={handleOpenFontMenu}
-              sx={{
-                textTransform: "none",
-                color: "text.primary",
-                minWidth: isMobile || isTablet ? 40 : "auto",
-                px: isMobile || isTablet ? 1 : 2,
-              }}
-            >
-              {!isMobile && !isTablet && "Settings"}
-            </Button>
+            {/* User Avatar */}
+            <Tooltip title="Profile">
+              <IconButton
+                onClick={(e) => {
+                  setSettingsView("profile");
+                  handleOpenFontMenu(e);
+                }}
+                sx={{ p: 0.5 }}
+              >
+                <Avatar
+                  sx={{
+                    width: 35,
+                    height: 35,
+                    bgcolor: "primary.main",
+                    fontSize: "1rem",
+                    fontWeight: 600,
+                    border: "2px solid",
+                    borderColor: mode === "dark" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)"
+                  }}
+                >
+                  {profile?.name?.charAt(0).toUpperCase() || "U"}
+                </Avatar>
+              </IconButton>
+            </Tooltip>
 
             {/* Logout - Updated with confirmation */}
             <Button
@@ -284,7 +303,8 @@ const Header = ({
         </DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ color: "text.secondary" }}>
-            Are you sure you want to logout? You will need to login again to access your chats.
+            Are you sure you want to logout? You will need to login again to
+            access your chats.
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
@@ -315,11 +335,10 @@ const Header = ({
         </DialogActions>
       </Dialog>
 
-      {/* ================= SIDEBAR DRAWER ================= */}
       <Drawer
         anchor="left"
         open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
+        onClose={() => setSidebarOpen && setSidebarOpen(false)}
         ModalProps={{ keepMounted: true }}
         PaperProps={{
           sx: {
@@ -329,27 +348,30 @@ const Header = ({
           },
         }}
       >
-        {/*  YOUR EXISTING CHAT SIDEBAR COMPONENT */}
-        <ChatSidebar
-          onClose={() => setSidebarOpen(false)}
-          sessionData={sessionData}
-          savedSessions={savedSessions} 
-          loading={loading}
-          activeIndex={activeIndex}
-          setActiveIndex={setActiveIndex}
-          sidebarOpen={sidebarOpen}
-          setSidebarOpen={setSidebarOpen}
-          selectSession={selectSession}
-          fetchSessions={fetchSessions}
-          
-        />
+        {drawerContent || (
+          <ChatSidebar
+            onClose={() => setSidebarOpen && setSidebarOpen(false)}
+            sessionData={sessionData}
+            savedSessions={savedSessions}
+            loading={loading}
+            activeIndex={activeIndex}
+            setActiveIndex={setActiveIndex}
+            sidebarOpen={sidebarOpen}
+            setSidebarOpen={setSidebarOpen}
+            selectSession={selectSession}
+            fetchSessions={fetchSessions}
+          />
+        )}
       </Drawer>
 
-      {/* ================= FONT POPOVER ================= */}
+      {/* = FONT POPOVER = */}
       <Popover
         open={openFontMenu}
         anchorEl={anchorElFont}
-        onClose={() => setAnchorElFont(null)}
+        onClose={() => {
+          setAnchorElFont(null);
+          setSettingsView("general");
+        }}
         anchorOrigin={{
           vertical: "bottom",
           horizontal: "right",
@@ -360,88 +382,228 @@ const Header = ({
         }}
         PaperProps={{
           sx: {
-            py: 2,
-            px: 5,
-            width: 400,
-            borderRadius: 5,
-            mt: 3,
-            boxShadow: "none",
+            py: 3,
+            px: 4,
+            width: 350,
+            borderRadius: 4,
+            mt: 2,
+            boxShadow: "0 10px 40px rgba(0,0,0,0.1)",
             border: "1px solid",
-            borderColor: "primary.main",
+            borderColor: "divider",
             backgroundColor: "background.paper",
           },
         }}
       >
-        <Typography variant="h4" fontWeight={600} mb={1}>
-          Font
-        </Typography>
+        {settingsView === "general" ? (
+          <>
+            <Box
+              display="flex"
+              justifyContent="space-between"
+              alignItems="center"
+              mb={2}
+            >
+              <Typography variant="h4" fontWeight={700}>
+                Settings
+              </Typography>
+              <Button
+                size="small"
+                startIcon={<AccountCircleOutlinedIcon />}
+                onClick={() => setSettingsView("profile")}
+                sx={{ textTransform: "none", borderRadius: 2 }}
+              >
+                View Profile
+              </Button>
+            </Box>
 
-        <Slider
-          value={fontLevel}
-          min={0}
-          max={2}
-          step={1}
-          marks={[
-            { value: 0, label: "Small" },
-            { value: 1, label: "Medium" },
-            { value: 2, label: "Large" },
-          ]}
-          onChange={(_, value) => setFontLevel(value)}
-        />
+            <Box
+              display="flex"
+              alignItems="center"
+              gap={2}
+              p={1.5}
+              mb={2}
+              sx={{
+                bgcolor: "action.hover",
+                borderRadius: 2,
+                cursor: "pointer",
+                transition: "opacity 0.2s",
+                "&:hover": { opacity: 0.8 }
+              }}
+              onClick={() => setSettingsView("profile")}
+            >
+              <Avatar
+                sx={{
+                  width: 40,
+                  height: 40,
+                  bgcolor: "primary.main",
+                  fontSize: "1.1rem",
+                }}
+              >
+                {profile?.name?.charAt(0).toUpperCase() || "U"}
+              </Avatar>
+              <Box sx={{ overflow: "hidden" }}>
+                <Typography variant="body1" fontWeight={600} noWrap>
+                  {profile?.name || "User Name"}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+                  {profile?.email || "No email provided"}
+                </Typography>
+              </Box>
+            </Box>
 
-        <Stack direction="row" justifyContent="space-between" mt={1}>
-          <Stack alignItems="center">
-            <TextFieldsIcon fontSize="small" />
-            <Typography variant="caption">Small</Typography>
-          </Stack>
-          <Stack alignItems="center">
-            <TextFieldsIcon />
-            <Typography variant="caption">Medium</Typography>
-          </Stack>
-          <Stack alignItems="center">
-            <TextFieldsIcon fontSize="large" />
-            <Typography variant="caption">Large</Typography>
-          </Stack>
-        </Stack>
+            <Divider sx={{ my: 2 }} />
 
-        <Divider sx={{ my: 1 }} />
+            <Typography variant="body1" fontWeight={600} mb={1}>
+              Font Size
+            </Typography>
 
-        {/* Theme section */}
-        <Typography variant="h4" fontWeight={600} mb={2}>
-          Theme
-        </Typography>
+            <Slider
+              value={fontLevel}
+              min={0}
+              max={2}
+              step={1}
+              marks={[
+                { value: 0, label: "Small" },
+                { value: 1, label: "Medium" },
+                { value: 2, label: "Large" },
+              ]}
+              onChange={(_, value) => setFontLevel(value)}
+              sx={{ mb: 1 }}
+            />
 
-        <Stack direction="row" spacing={1}>
-          <Button
-            fullWidth
-            variant={mode === "dark" ? "outlined" : "contained"}
-            startIcon={<LightModeIcon />}
-            size="medium"
-            sx={{
-              borderRadius: 3,
-              textTransform: "none",
-              fontWeight: 600,
-            }}
-            onClick={toggleMode}
-          >
-            Light Mode
-          </Button>
+            <Stack direction="row" justifyContent="space-between" mb={3}>
 
-          <Button
-            fullWidth
-            variant={mode === "dark" ? "contained" : "outlined"}
-            startIcon={<DarkModeIcon />}
-            size="medium"
-            sx={{
-              borderRadius: 3,
-              textTransform: "none",
-              fontWeight: 600,
-            }}
-            onClick={toggleMode}
-          >
-            Dark Mode
-          </Button>
-        </Stack>
+            </Stack>
+
+            <Divider sx={{ my: 2 }} />
+
+            <Typography variant="body1" fontWeight={600} mb={2}>
+              Theme
+            </Typography>
+
+            <Stack direction="row" spacing={2}>
+              <Button
+                fullWidth
+                variant={mode === "light" ? "contained" : "outlined"}
+                startIcon={<LightModeIcon />}
+                onClick={() => mode !== "light" && toggleMode()}
+                sx={{ borderRadius: 2, textTransform: "none" }}
+              >
+                Light
+              </Button>
+              <Button
+                fullWidth
+                variant={mode === "dark" ? "contained" : "outlined"}
+                startIcon={<DarkModeIcon />}
+                onClick={() => mode !== "dark" && toggleMode()}
+                sx={{ borderRadius: 2, textTransform: "none" }}
+              >
+                Dark
+              </Button>
+            </Stack>
+          </>
+        ) : (
+          <>
+            <Box
+              display="flex"
+              justifyContent="space-between"
+              alignItems="center"
+              mb={3}
+            >
+              <Box display="flex" alignItems="center">
+                <IconButton
+                  size="small"
+                  onClick={() => setSettingsView("general")}
+                  sx={{ mr: 1 }}
+                >
+                  <ArrowBackIosNewIcon fontSize="small" />
+                </IconButton>
+                <Typography variant="h4" fontWeight={700}>
+                  Profile
+                </Typography>
+              </Box>
+              <Button
+                size="small"
+                startIcon={<SettingsOutlinedIcon />}
+                onClick={() => setSettingsView("general")}
+                sx={{ textTransform: "none", borderRadius: 2 }}
+              >
+                Settings
+              </Button>
+            </Box>
+
+            <Box
+              display="flex"
+              flexDirection="column"
+              alignItems="center"
+              textAlign="center"
+              py={2}
+            >
+              <Avatar
+                sx={{
+                  width: 80,
+                  height: 80,
+                  bgcolor: "primary.main",
+                  mb: 2,
+                  fontSize: "2rem",
+                }}
+              >
+                {profile?.name?.charAt(0).toUpperCase() || "U"}
+              </Avatar>
+              <Typography variant="h5" fontWeight={700} gutterBottom>
+                {profile?.name || "User Name"}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" mb={1}>
+                {profile?.email || ""}
+              </Typography>
+              {profile?.role && (
+                <Box
+                  sx={{
+                    bgcolor: "action.hover",
+                    px: 2,
+                    py: 0.5,
+                    borderRadius: 5,
+                    mt: 1,
+                  }}
+                >
+                  <Typography variant="caption" fontWeight={600}>
+                    {profile.role.toUpperCase()}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Button
+              fullWidth
+              variant="outlined"
+              color="primary"
+              sx={{ mb: 2, borderRadius: 2, textTransform: "none" }}
+              onClick={() => {
+                setAnchorElFont(null);
+                setSettingsView("general");
+                navigate('/admin/chat-history');
+              }}
+            >
+              Admin Page
+            </Button>
+
+            <Button
+              fullWidth
+              variant="outlined"
+              color="error"
+              startIcon={<LogoutOutlinedIcon />}
+              onClick={() => {
+                setAnchorElFont(null);
+                setSettingsView("general");
+                handleLogoutClick();
+              }}
+              sx={{ borderRadius: 2, textTransform: "none" }}
+            >
+              Logout from account
+            </Button>
+          </>
+        )}
       </Popover>
     </>
   );

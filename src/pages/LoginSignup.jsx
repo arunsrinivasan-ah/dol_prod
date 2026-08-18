@@ -5,9 +5,8 @@ import {
   Stack,
   TextField,
   Typography,
-  Link,
   InputAdornment,
-  useTheme,
+  
 } from "@mui/material";
 import { useState } from "react";
 import { loginApi } from "../api/apiAuth";
@@ -31,9 +30,9 @@ export default function Login({ onLoginSuccess }) {
   const [errors, setErrors] = useState({});
   const [openForgot, setOpenForgot] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const { mode } = useThemeMode();
-  const theme = useTheme();
 
   const validate = () => {
     const newErrors = {};
@@ -52,6 +51,7 @@ export default function Login({ onLoginSuccess }) {
     e.preventDefault();
     if (!validate()) return;
 
+    setLoading(true);
     try {
       const userId = await loginApi(email, password);
       localStorage.setItem("user_id", userId);
@@ -60,6 +60,8 @@ export default function Login({ onLoginSuccess }) {
       setErrors({
         form: error.message || "Something went wrong",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -90,7 +92,7 @@ export default function Login({ onLoginSuccess }) {
         >
           <Box
             component="img"
-            src={mode == "dark" ? DolphinWhite : dolphinBlack}
+            src={mode === "dark" ? DolphinWhite : dolphinBlack}
             alt="dolphin"
             sx={{
               width: 80,
@@ -354,11 +356,11 @@ export default function Login({ onLoginSuccess }) {
                             sx={{ cursor: "pointer", display: "flex" }}
                           >
                             {showPassword ? (
-                              <VisibilityOff
+                              <Visibility
                                 sx={{ color: "text.placeholder1" }}
                               />
                             ) : (
-                              <Visibility sx={{ color: "text.placeholder1" }} />
+                              <VisibilityOff sx={{ color: "text.placeholder1" }} />
                             )}
                           </Box>
                         </InputAdornment>
@@ -369,7 +371,7 @@ export default function Login({ onLoginSuccess }) {
               </Box>
             </Stack>
 
-            <Box textAlign="right" my={1}>
+            {/* <Box textAlign="right" my={1}>
               <Typography
                 variant="h6"
                 onClick={() => setOpenForgot(true)}
@@ -384,7 +386,7 @@ export default function Login({ onLoginSuccess }) {
               >
                 Forgot Password ?
               </Typography>
-            </Box>
+            </Box> */}
 
             {errors.form && (
               <Typography color="error" textAlign="center">
@@ -402,10 +404,11 @@ export default function Login({ onLoginSuccess }) {
                 py: 1,
                 borderRadius: 2,
                 mb: 1,
+                mt: 2,
                 color: "text.white",
               }}
             >
-              SIGN IN
+              {loading ? "Signing..." : "SIGN IN"}
             </Button>
 
             <Typography

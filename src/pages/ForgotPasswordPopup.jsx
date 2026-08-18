@@ -14,7 +14,6 @@ import dolphinBlack from "../assets/images/dolphin_b.png";
 import DolphinWhite from "../assets/images/dolphin_w.png";
 import { useThemeMode } from "../context/ThemeModeContext";
 
-const APP_URL = process.env.REACT_APP_BASE_URL;
 
 export default function ForgotPasswordPopup({ open, handleClose }) {
   const [email, setEmail] = useState("");
@@ -61,7 +60,7 @@ export default function ForgotPasswordPopup({ open, handleClose }) {
         >
           <Box
             component="img"
-            src={mode == "dark" ? DolphinWhite : dolphinBlack}
+            src={mode === "dark" ? DolphinWhite : dolphinBlack}
             alt="dolphin"
             sx={{
               width: 50,
