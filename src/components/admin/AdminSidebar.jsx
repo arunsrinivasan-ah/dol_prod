@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Typography, List, ListItem, ListItemIcon, ListItemText, ListItemButton } from '@mui/material';
 import HistoryIcon from '@mui/icons-material/History';
+import GroupIcon from '@mui/icons-material/Group';
 import { useThemeMode } from '../../context/ThemeModeContext';
 import { getSidebarWidth } from '../../theme/layoutScale';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -15,6 +16,11 @@ const AdminSidebar = ({ setSidebarOpen }) => {
       title: 'Chat History',
       icon: <HistoryIcon />,
       path: '/admin/chat-history'
+    },
+    {
+      title: 'Members',
+      icon: <GroupIcon />,
+      path: '/admin/members'
     }
   ];
 
