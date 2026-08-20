@@ -54,6 +54,7 @@ function App() {
     localStorage.removeItem("active_session_id");
     setUserId(null);
     setUserRole(null);
+    window.history.replaceState(null, "", "/dolphin-rb/ui");
   };
 
   if (authLoading) {

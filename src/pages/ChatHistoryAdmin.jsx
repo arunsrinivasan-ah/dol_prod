@@ -19,6 +19,8 @@ import {
   IconButton,
   Drawer,
   CircularProgress,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
@@ -87,21 +89,19 @@ const ChatHistoryAdmin = () => {
   const [totalRows, setTotalRows] = useState(0);
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
+  const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [snackbarSeverity, setSnackbarSeverity] = useState("success");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sessionDetails, setSessionDetails] = useState(null);
   const [sessionLoading, setSessionLoading] = useState(false);
-  const [sessionError, setSessionError] = useState("");
 
   useEffect(() => {
     const timer = setTimeout(async () => {
       let isMounted = true;
-
       const fetchChatHistory = async () => {
         setLoading(true);
-        setError("");
 
         try {
           const query = {
@@ -130,7 +130,8 @@ const ChatHistoryAdmin = () => {
           if (!isMounted) return;
           setChatRows([]);
           setTotalRows(0);
-          setError(err.message || "Failed to load chat history");
+          setSnackbarMessage(err.message || "Failed to load chat history");
+          setSnackbarSeverity("error");
         } finally {
           if (isMounted) {
             setLoading(false);
@@ -156,11 +157,14 @@ const ChatHistoryAdmin = () => {
     setCurrentPage(1);
   };
 
+  const handleCloseSnackbar = () => {
+    setSnackbarMessage("");
+  };
+
   const handleViewChat = (row) => {
     setSelectedSessionId(row.session_id);
     setDrawerOpen(true);
     setSessionLoading(true);
-    setSessionError("");
     setSessionDetails(null);
 
     // Defer API call to ensure the side panel opens ASAP
@@ -173,7 +177,8 @@ const ChatHistoryAdmin = () => {
         const data = await apiGet(url);
         setSessionDetails(data);
       } catch (err) {
-        setSessionError(err.message || "Failed to load session details");
+        setSnackbarMessage(err.message || "Failed to load session details");
+        setSnackbarSeverity("error");
       } finally {
         setSessionLoading(false);
       }
@@ -253,15 +258,6 @@ const ChatHistoryAdmin = () => {
           >
             {!loading && `Showing ${chatRows.length > 0 ? (currentPage - 1) * ROWS_PER_PAGE + 1 : 0}-${Math.min(currentPage * ROWS_PER_PAGE, totalRows)} of ${totalRows} results`}
           </Typography>
-
-          {error && (
-            <Typography
-              variant="body2"
-              sx={{ mt: 1, color: "error.main" }}
-            >
-              {error}
-            </Typography>
-          )}
         </Paper>
 
         <Paper
@@ -423,12 +419,7 @@ const ChatHistoryAdmin = () => {
               <CircularProgress />
             </Box>
           )}
-          {sessionError && (
-            <Typography color="error" align="center" sx={{ mt: 4 }}>
-              {sessionError}
-            </Typography>
-          )}
-          {!sessionLoading && !sessionError && sessionDetails?.messages?.map((msg) => {
+          {!sessionLoading && sessionDetails?.messages?.map((msg) => {
             const isAssistant = msg.role === "assistant";
             const msgDate = new Date(msg.timestamp);
             const today = new Date();
@@ -472,13 +463,24 @@ const ChatHistoryAdmin = () => {
               </Box>
             );
           })}
-          {!sessionLoading && !sessionError && (!sessionDetails?.messages || sessionDetails.messages.length === 0) && (
+          {!sessionLoading && (!sessionDetails?.messages || sessionDetails.messages.length === 0) && (
             <Typography align="center" color="text.secondary" sx={{ mt: 4 }}>
               No messages found.
             </Typography>
           )}
         </Box>
       </Drawer>
+
+      <Snackbar
+        open={!!snackbarMessage}
+        autoHideDuration={4000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbarSeverity} sx={{ width: '100%' }}>
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
