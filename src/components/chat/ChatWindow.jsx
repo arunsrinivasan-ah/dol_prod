@@ -186,6 +186,7 @@ const EMPTY_LIVE = {
   media: { videos: [], images: [], pdfs: [] },
   topics: [],
   transcripts: [],
+  checkLicCoursesData: null
 };
 
 // Factory so we always get a fresh object (avoids accidental mutation sharing)
@@ -197,6 +198,7 @@ const EMPTY_ACC = () => ({
   topics: [],
   pendingTopics: [],
   transcripts: [],
+  checkLicCoursesData: null,
 });
 
 // ─── Component ────
@@ -665,6 +667,14 @@ const ChatWindow = ({
               }
             },
 
+            onCheckLicCourses: (data) => {
+              accRef.current.checkLicCoursesData = data;
+              setLiveMessage((prev) => ({
+                ...prev,
+                checkLicCoursesData: data,
+              }));
+            },
+
             onCompanyContent: (contentChunk) => {
               if (document.hidden) {
                 accRef.current.company_content += contentChunk;
@@ -827,6 +837,7 @@ const ChatWindow = ({
                     topics: acc.topics,
                     transcripts: acc.transcripts,
                     question_suggestions: acc.suggestions || [],
+                    checkLicCoursesData: acc.checkLicCoursesData,
                     timestamp: new Date().toISOString(),
                     mediaLoaded: true,
                   },

@@ -857,6 +857,45 @@ const ChatMessage = ({
                 </Box>
               </Box>
             )}
+            {
+              msg.checkLicCoursesData && msg.checkLicCoursesData.length > 0 && (
+                <Box sx={{ mt: 2.5 }}>
+                  <Typography
+                    variant="body1"
+                    sx={{
+                      color: "text.primary",
+                      fontWeight: 600,
+                      letterSpacing: "0.08em",
+                    }}
+                  >
+                    Topics from licensed courses
+                  </Typography>
+
+                  {msg.checkLicCoursesData?.map((course, i) => (
+                    course.matched && (
+                      <Box
+                        key={i}
+                        sx={(theme) => ({
+                          display: "flex",
+                          alignItems: "center",
+                          p: 1,
+                          borderRadius: 3,
+                          backgroundColor: "background.light",
+                          cursor: "pointer",
+                          transition: "all 0.2s ease",
+                          border: "1.5px solid transparent",
+                          "&:hover": {
+                            borderColor: theme.palette.primary.main,
+                            color: theme.palette.primary.main,
+                          },
+                        })}
+                      >
+                        {course.data?.course}
+                      </Box>
+                    )
+                  ))}
+                </Box>
+              )}
 
             {/* Follow-up suggestions */}
             {shouldShowQuestions && (

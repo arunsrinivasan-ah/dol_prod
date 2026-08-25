@@ -14,6 +14,22 @@ export const fetchHealth = async () => {
   }
 };
 
+const checkLicCourses = async (param) => {
+  const response = await fetch(`${APP_URL}/course/check-topic-course`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      topic_code: param.topic_code,
+      user_id: param.user_id // Put a valid logged-in user ID here
+    })
+  });
+
+  const data = await response.json();
+  return data;
+};
+
 export const submitMessageFeedback = async (feedbackData) => {
   try {
     const response = await fetch(`${APP_URL}/sessions/message-feedback`, {
@@ -40,10 +56,11 @@ export const sendMessage = async (
   sessionId,
   messageText,
   signal,
-  { onContentToken, onSuggestions, onMedia, onTopic, onError, onDone, onCompanyContent, onTranscriptResult } = {},
+  { onContentToken, onSuggestions, onMedia, onTopic, onError, onDone, onCompanyContent, onTranscriptResult, onCheckLicCourses } = {},
 ) => {
   const userId = localStorage.getItem("user_id");
   const role = localStorage.getItem("role");
+  const topicCourses = [];
 
   let response;
 
@@ -136,8 +153,6 @@ export const sendMessage = async (
         case "suggestions": {
           const suggestions = event.question_suggestions ?? [];
 
-          console.log("Suggestions received:", suggestions);
-
           onSuggestions?.(suggestions);
 
           break;
@@ -148,6 +163,15 @@ export const sendMessage = async (
           onTopic?.({
             code: event.topic_code ?? "",
             name: event.topic_name ?? "",
+          });
+          checkLicCourses({
+            topic_code: event.topic_code,
+            user_id: userId,
+          }).then((data) => {
+            topicCourses.push(data)
+            onCheckLicCourses?.(topicCourses);
+          }).catch((error) => {
+            console.error("Test endpoint error:", error);
           });
           break;
 
