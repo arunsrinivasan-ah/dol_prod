@@ -10,17 +10,18 @@ import {
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 
-const APP_URL =process.env.REACT_APP_BASE_URL;
+const APP_URL = process.env.REACT_APP_BASE_URL;
 
-const QuizDisplay = ({ quizContet }) => {
+const QuizDisplay = ({ quizContent }) => {
   const [answers, setAnswers] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null); 
+  const [result, setResult] = useState(null);
 
   // initialize answers
   useEffect(() => {
-    setAnswers(new Array(quizContet.quiz_items.length).fill(null));
-  }, [quizContet]);
+    const length = quizContent?.quiz_items?.length || 0;
+    setAnswers(new Array(length).fill(null));
+  }, [quizContent]);
 
   const handleChange = (qIndex, optionIndex) => {
     if (result) return; // lock answers after submit
@@ -39,7 +40,7 @@ const QuizDisplay = ({ quizContet }) => {
       const resp = await axios.post(
         `${APP_URL}/quiz/grade`,
         {
-          quiz_items: quizContet.quiz_items,
+          quiz_items: quizContent?.quiz_items || [],
           user_answers: answers,
         },
         { headers: { "Content-Type": "application/json" } }
@@ -54,17 +55,18 @@ const QuizDisplay = ({ quizContet }) => {
   };
 
   const retakeQuiz = () => {
-    setAnswers(new Array(quizContet.quiz_items.length).fill(null));
+    const length = quizContent?.quiz_items?.length || 0;
+    setAnswers(new Array(length).fill(null));
     setResult(null);
   };
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <Typography>{quizContet.content}</Typography>
+      <Typography>{quizContent?.content}</Typography>
 
 
       {/* ===== QUESTIONS ===== */}
-      {quizContet.quiz_items.map((item, qIndex) => (
+      {quizContent.quiz_items && quizContent.quiz_items.length > 0 && quizContent.quiz_items.map((item, qIndex) => (
         <Paper
           key={qIndex}
           elevation={0}
@@ -103,7 +105,7 @@ const QuizDisplay = ({ quizContet }) => {
         </Paper>
       ))}
 
-      
+
       {/* ===== RESULT SUMMARY ===== */}
       {result && (
         <Paper
