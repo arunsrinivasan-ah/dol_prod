@@ -148,28 +148,6 @@ export const markdownContainerSx = {
 
   "& strong": { fontWeight: 600 },
   "& em": { fontStyle: "italic" },
-
-  // Topic citation badge
-  "& .topic-citation": {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "18px",
-    height: "18px",
-    borderRadius: "50%",
-    backgroundColor: "primary.main",
-    color: "#fff",
-    fontSize: "0.65rem",
-    fontWeight: 700,
-    cursor: "pointer",
-    margin: "0 4px",
-    verticalAlign: "middle",
-    transition: "transform 0.2s ease",
-    "&:hover": {
-      transform: "scale(1.2)",
-      backgroundColor: "primary.dark",
-    },
-  },
 };
 
 // ── Thinking animation ───
@@ -517,16 +495,6 @@ const ChatMessage = ({
                     display: "block",
                     lineHeight: 1.7,
                   }}
-                  onClick={(e) => {
-                    const target = e.target.closest(".topic-citation");
-                    if (target) {
-                      const index =
-                        parseInt(target.getAttribute("data-topic-index")) - 1;
-                      if (msg.topics && msg.topics[index]) {
-                        onTopicClick?.(msg.topics[index]);
-                      }
-                    }
-                  }}
                 >
                   {plainText ? (
                     <Typography
@@ -554,7 +522,7 @@ const ChatMessage = ({
                           skipMarkdownFormatting
                         ).replace(
                           /(?:@@SOURCE_REF_|\[\[\s*Ref:?\s*)(\d+)\s*(?:@@|\]\])/gi,
-                          '<span class="topic-citation" data-topic-index="$1" title="Click to see related topic notes">$1</span>',
+                          "",
                         ),
                       }}
                     />
@@ -857,45 +825,90 @@ const ChatMessage = ({
                 </Box>
               </Box>
             )}
-            {
-              msg.checkLicCoursesData && msg.checkLicCoursesData.length > 0 && (
-                <Box sx={{ mt: 2.5 }}>
+
+            {(() => {
+              if (!msg.checkLicCoursesData || !Array.isArray(msg.checkLicCoursesData) || msg.checkLicCoursesData.length === 0) return null;
+
+              const userType = msg.checkLicCoursesData[0]?.user_type?.toLowerCase() || "";
+              const isStudent = userType === "student";
+
+              const coursesToShow = msg.checkLicCoursesData.filter((item) => {
+                if (isStudent) return item.matched;
+                return true;
+              });
+
+              const uniqueCoursesMap = new Map();
+              coursesToShow.forEach((item) => {
+                const courseInfo = item.data?.course;
+                if (courseInfo) {
+                  const code = courseInfo.CourseCode || courseInfo.courseCode;
+                  if (code && !uniqueCoursesMap.has(code)) {
+                    uniqueCoursesMap.set(code, {
+                      ...courseInfo,
+                      matched: item.matched,
+                      topicName: item.data?.topic_name
+                    });
+                  }
+                }
+              });
+
+              const uniqueCourses = Array.from(uniqueCoursesMap.values());
+
+              if (uniqueCourses.length === 0) return null;
+
+              return (
+                <Box sx={{ mt: 3, mb: 1 }}>
                   <Typography
-                    variant="body1"
+                    variant="overline"
                     sx={{
-                      color: "text.primary",
-                      fontWeight: 600,
+                      color: "text.secondary",
+                      fontWeight: 700,
                       letterSpacing: "0.08em",
+                      mb: 1.5,
+                      display: "block"
                     }}
                   >
-                    Topics from licensed courses
+                    Related Courses
                   </Typography>
-
-                  {msg.checkLicCoursesData?.map((course, i) => (
-                    course.matched && (
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                    {uniqueCourses.map((course, i) => (
                       <Box
                         key={i}
                         sx={(theme) => ({
                           display: "flex",
                           alignItems: "center",
-                          p: 1,
-                          borderRadius: 3,
-                          backgroundColor: "background.light",
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                          border: "1.5px solid transparent",
-                          "&:hover": {
-                            borderColor: theme.palette.primary.main,
-                            color: theme.palette.primary.main,
-                          },
+                          justifyContent: "space-between",
+                          p: 1.5,
+                          borderRadius: 2,
+                          backgroundColor: course.matched
+                            ? theme.palette.mode === "dark" ? "rgba(46, 125, 50, 0.15)" : "rgba(46, 125, 50, 0.04)"
+                            : theme.palette.mode === "dark" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                          border: `1px solid ${course.matched
+                            ? theme.palette.mode === "dark" ? "rgba(76, 175, 80, 0.3)" : "rgba(46, 125, 50, 0.2)"
+                            : theme.palette.divider
+                            }`,
                         })}
                       >
-                        {course.data?.course}
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary" }}>
+                            {course.CourseName || course.courseName || "Unknown Course"}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.5 }}>
+                            {course.topicName && `Topic: ${course.topicName}`}
+                          </Typography>
+                        </Box>
+                        {course.matched && (
+                          <Box sx={{ bgcolor: "success.main", color: "success.contrastText", px: 1.5, py: 0.5, borderRadius: 1.5, fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.05em" }}>
+                            LICENSED
+                          </Box>
+                        )}
                       </Box>
-                    )
-                  ))}
+                    ))}
+                  </Box>
                 </Box>
-              )}
+              );
+            })()}
+
 
             {/* Follow-up suggestions */}
             {shouldShowQuestions && (
