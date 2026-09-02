@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const APP_URL = process.env.REACT_APP_BASE_URL;
+const APP_URL = process.env.REACT_APP_BASE_URL || "http://localhost:8000";
 export const loginApi = async (email, password) => {
   try {
     const response = await axios.post(
@@ -17,6 +17,7 @@ export const loginApi = async (email, password) => {
     const userId = response.data.user_id; 
 
     localStorage.setItem("userId", userId);
+    localStorage.setItem("user_id", userId);
     localStorage.setItem("userData", JSON.stringify(response.data));
 
     return userId;
@@ -56,6 +57,7 @@ export const logout = async () => {
     }
   } finally {
     localStorage.removeItem("userId");
+    localStorage.removeItem("user_id");
     localStorage.removeItem("userData");
   }
 };

@@ -48,8 +48,9 @@ function App() {
   };
 
   const handleLogout = async () => {
-    await logout()
+    await logout();
     localStorage.removeItem("userId");
+    localStorage.removeItem("user_id");
     localStorage.removeItem("userData");
     localStorage.removeItem("active_session_id");
     setUserId(null);
@@ -64,7 +65,7 @@ function App() {
   return userId ? (
     <Router basename="/dolphin-rb/ui">
       <Routes>
-        <Route path="/" element={<Chatpage userId={userId} onLogout={handleLogout} />} />
+        <Route path="/" element={<Chatpage userId={userId} setUserId={setUserId} onLogout={handleLogout} />} />
         <Route path="/admin" element={
           userRole === "ADMIN" || userRole === "SUPER_ADMIN" ?
             <AdminPage onLogout={handleLogout} />

@@ -7,7 +7,7 @@ import axios from "axios";
 import Header from "../../components/header/Header";
 import MainLayout from "../../layouts/MainLayout";
 
-const APP_URL = process.env.REACT_APP_BASE_URL;
+const APP_URL = process.env.REACT_APP_BASE_URL || "http://localhost:8000";
 
 const Chatpage = ({ userId, setUserId, onLogout }) => {
   const [sessionData, setSessionData] = useState([]);
@@ -41,11 +41,15 @@ const Chatpage = ({ userId, setUserId, onLogout }) => {
         withCredentials: true,
       });
 
-      if (response.status === 200) {
-        // Only update if data actually changed
-        const newData = response.data;
-        setSessionData(prevData => {
-          if (JSON.stringify(prevData) === JSON.stringify(newData)) {
+      const data = response.data;
+      if (Array.isArray(data)) {
+        setSessionData((prevData) => {
+          const prevMap = new Map(prevData.map(s => [s.session_id, s]));
+          const newData = data.map(s => {
+            const existing = prevMap.get(s.session_id);
+            return existing && existing.title !== s.title ? { ...s, title: s.title } : (existing || s);
+          });
+          if (prevData.length === newData.length && prevData.every((item, i) => item.session_id === newData[i].session_id && item.title === newData[i].title)) {
             return prevData;
           }
           return newData;
@@ -92,23 +96,32 @@ const Chatpage = ({ userId, setUserId, onLogout }) => {
     initialLoadRef.current = true;
 
     const loadHealth = async () => {
-      const health = await fetchHealth();
-      if (health) {
-        await fetchSessions();
+      try {
+        const health = await fetchHealth();
+        if (health) {
+          await fetchSessions();
 
-        // Auto-load last active session
-        const lastSessionId = localStorage.getItem("active_session_id");
-        if (lastSessionId) {
-          await selectSession(lastSessionId);
+          // Auto-load last active session
+          const lastSessionId = localStorage.getItem("active_session_id");
+          if (lastSessionId) {
+            await selectSession(lastSessionId);
+          }
+        } else {
+          if (onLogout) {
+            onLogout();
+          } else if (typeof setUserId === "function") {
+            setUserId(null);
+          }
         }
-      } else {
-        setUserId(null);
+      } catch (err) {
+        console.error("Failed to check health / load sessions:", err);
+      } finally {
+        setIsInitializing(false);
       }
-      setIsInitializing(false);
     };
 
     loadHealth();
-  }, [fetchSessions, setUserId, selectSession]);
+  }, [fetchSessions, setUserId, selectSession, onLogout]);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));

@@ -23,10 +23,12 @@ export default function ForgotPasswordPopup({ open, handleClose }) {
 
   const { mode } = useThemeMode();
 
+  const APP_URL = process.env.REACT_APP_BASE_URL || "http://localhost:8000";
+
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      await axios.post(`/forgot-password`, {
+      await axios.post(`${APP_URL}/forgot-password`, {
         email: email,
       });
       setSuccess(true);

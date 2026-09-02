@@ -34,16 +34,16 @@ import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 const formatGlossaryContent = (content) => {
   if (!content) return "";
   return content.replace(
-    /([A-Z][A-Z\s]{2,}):\s*([^]+?)(?=(?:[A-Z][A-Z\s]{2,}:)|$)/g,
+    /([A-Z][A-Z\s]{2,}):\s*([\s\S]+?)(?=(?:[A-Z][A-Z\s]{2,}:)|$)/g,
     (_, title, desc) =>
-      `\n- ${title
+      `\n- **${title
         .trim()
         .toLowerCase()
-        .replace(/\b\w/g, (c) => c.toUpperCase())} - ${desc.trim()}\n`,
+        .replace(/\b\w/g, (c) => c.toUpperCase())}**: ${desc.trim()}\n`,
   );
 };
 
-const formatMarkdownContent = (content) => {
+export const formatMarkdownContent = (content) => {
   if (!content) return "";
 
   let formatted = formatGlossaryContent(content);
@@ -51,37 +51,53 @@ const formatMarkdownContent = (content) => {
   // Remove thinking text
   formatted = formatted.replace(/Dolphin is thinking\.\.\./gi, "");
 
-  // Ensure markdown headings start on new line
-  formatted = formatted.replace(/([^\n])(#{1,6}\s)/g, "$1\n\n$2");
+  // Clean up broken inline step linebreaks e.g. (step\n7. and ... -> (step 7) and ...
+  formatted = formatted.replace(/\(step\s*[\r\n]+\s*(\d+)[\.\)]?/gi, "(step $1)");
+  formatted = formatted.replace(/\(step\s+(\d+)\s*[\r\n]+\s*(\d+)[\.\)]?/gi, "(step $1, $2)");
 
-  // Format numbered lists (1. or 1)) to ensure they are on new lines
-  // Use [ \t]+ instead of \s* to avoid matching across existing newlines
-  formatted = formatted.replace(/([^\n])[ \t]+(\d+[.)])[ \t]+/g, "$1\n$2 ");
+  // Ensure markdown headings start on new lines with blank lines before & after
+  formatted = formatted.replace(/([^\n])\s*(#{1,6}\s+[^\n]+)/g, "$1\n\n$2\n\n");
 
-  // Bullet lists (inline)
-  // Only target • to avoid breaking hyphenated phrases or sentences with dashes
-  formatted = formatted.replace(/([^\n])[ \t]+([•])[ \t]+/g, "$1\n$2 ");
-
-  // Convert section titles at the start of a line into markdown headers
+  // Common standalone section headers (e.g., Advantages, Disadvantages, Precautions, etc.)
   formatted = formatted.replace(
-    /(^|\n)\s*(Advantages|Disadvantages|Merits|Demerits)(?::|\.?\s*[\n\r]|$)/gi,
-    "$1\n$2\n",
+    /(^|\n)\s*(Advantages|Disadvantages|Merits|Demerits|Key Points|Precautions|Procedures|Requirements|Overview|Summary|Safety Controls|Emergency Procedures|Operational Guidelines|Responsibilities|Checklist)(?::|\.?\s*[\n\r]|$)/gi,
+    "$1\n\n### $2\n\n",
   );
 
-  // Remove excessive blank lines
-  formatted = formatted.replace(/\n{3,}/g, "\n\n");
+  // If a title is merged mid-paragraph after a sentence ending period (e.g., "...operation. Unloading Operations The unloading process starts...")
+  formatted = formatted.replace(
+    /(?<=[.?!])\s+([A-Z][A-Za-z0-9&/\-\s]{2,50}?)\s+(The |This |Accidental |In terms of |During |Before |After |When |It is |These |Proper |Safety |All |Step )/g,
+    "\n\n### $1\n\n$2",
+  );
 
-  // Remove heading markup (###) if it's followed by a lot of text (>100 chars) without a newline
-  formatted = formatted.replace(/^(#{1,6})\s+([^#\n]{100,})/gm, "$2");
+  // If a title is at the start of a block/line followed by a sentence (e.g., "Loading and Unloading Procedures Load and Discharge Plan Accidental stress...")
+  formatted = formatted.replace(
+    /(^|\n{2,})([A-Z][A-Za-z0-9&/\-\s]{2,60}?)\s+(The |This |Accidental |In terms of |During |Before |After |When |It is |These |Proper |Safety |All |Step )/g,
+    "$1### $2\n\n$3",
+  );
 
-  // Remove bolding from very long blocks (>150 chars)
-  formatted = formatted.replace(/\*\*([^*]{150,})\*\*/g, "$1");
+  // Standalone line that looks like a title (Title Cased or with colon, not a list item)
+  formatted = formatted.replace(
+    /(^|\n{2,})([A-Z][A-Za-z0-9\s,&/\-]{2,50})(?::|\s*\n)\s*(?=[A-Z])/g,
+    "$1### $2\n\n",
+  );
 
-  // Convert inline numbered points in parentheses to new lines (e.g., (1))
+  // Format numbered lists: ensure "1. ", "2. " start on new lines
+  formatted = formatted.replace(/([^\n])[ \t]+(\d+[\.\)])[ \t]+/g, "$1\n$2 ");
+  formatted = formatted.replace(/^\s*(\d+)[\.\)]\s+/gm, "$1. ");
+
+  // Bullet lists: ensure "• " or "- " start on new lines
+  formatted = formatted.replace(/([^\n])[ \t]+([•\-\*])[ \t]+/g, "$1\n- ");
+  formatted = formatted.replace(/^\s*[•\-\*]\s+/gm, "- ");
+
+  // Fix inline numbered steps in parentheses (1) -> 1.
   formatted = formatted.replace(/(?:^|[ \t]+)\((\d+)\)[ \t]+/g, "\n$1. ");
 
-  // Ensure numbered lists (1. 2. 3.) retain their numbers
-  formatted = formatted.replace(/^\s*(\d+)[.)]\s+/gm, "$1. ");
+  // Attribution / organization lines in parenthesis e.g. "International Association of Classification Societies Ltd (IACS)." alone on line
+  formatted = formatted.replace(
+    /(^|\n)\s*([A-Z][A-Za-z\s]+(?:Ltd|Inc|Org|IACS|IMO|SOLAS|MARPOL|STCW|ISGOTT|ICS)\s*(?:\([A-Z0-9]+\))?\.?)\s*($|\n)/g,
+    "$1\n> **$2**\n$3",
+  );
 
   // Remove orphan "(" appearing alone on a line
   formatted = formatted.replace(/^\s*\(\s*$/gm, "");
@@ -98,46 +114,18 @@ const formatMarkdownContent = (content) => {
   // Ensure specific terms requested by user are always bolded
   formatted = formatted.replace(/\b(company name|vessel name|course name)\b/gi, "**$1**");
 
+  // Remove excessive blank lines
+  formatted = formatted.replace(/\n{3,}/g, "\n\n");
+
+  // Balance unclosed bold and italic markers
   const boldMatches = formatted.match(/\*\*/g);
   if (boldMatches && boldMatches.length % 2 !== 0) {
     formatted += "**";
   }
-  // Only match single asterisks not part of a double asterisk
   const italicMatches = formatted.replace(/\*\*/g, "").match(/\*/g);
   if (italicMatches && italicMatches.length % 2 !== 0) {
     formatted += "*";
   }
-
-  // Auto-format large blocks of text that lack basic markdown structures
-  let blocks = formatted.split(/\n{2,}/);
-
-  blocks = blocks.map(block => {
-    let b = block.trim();
-    if (
-      b.length > 200 &&
-      !/(^|\n)#{1,6}\s/.test(b) &&
-      !/(^|\n)[-*•]\s/.test(b) &&
-      !/(^|\n)\d+\.\s/.test(b)
-    ) {
-      // Split into sentences
-      const sentences = b.split(/(?<=[.?!])\s+(?=[A-Z])/);
-      let newFormatted = "";
-
-      sentences.forEach((s, i) => {
-        if (i === 0) {
-          // First sentence as intro/header
-          newFormatted += `${s}\n\n`;
-        } else {
-          // Make all subsequent sentences into bullet points
-          newFormatted += `- ${s}\n`;
-        }
-      });
-      return newFormatted.trim();
-    }
-    return b; // return unchanged if it has markdown or is too short
-  });
-
-  formatted = blocks.join('\n\n');
 
   return formatted.trim();
 };

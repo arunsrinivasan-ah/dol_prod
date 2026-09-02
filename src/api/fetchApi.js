@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const APP_URL = process.env.REACT_APP_BASE_URL;
+const APP_URL = process.env.REACT_APP_BASE_URL || "http://localhost:8000";
 
 export const fetchHealth = async () => {
   try {
