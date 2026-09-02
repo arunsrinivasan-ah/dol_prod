@@ -55,7 +55,7 @@ function App() {
     localStorage.removeItem("active_session_id");
     setUserId(null);
     setUserRole(null);
-    window.history.replaceState(null, "", "/dolphin-rb/ui");
+    window.history.replaceState(null, "", process.env.PUBLIC_URL || "/");
   };
 
   if (authLoading) {
@@ -63,7 +63,7 @@ function App() {
   }
 
   return userId ? (
-    <Router basename="/dolphin-rb/ui">
+    <Router basename={process.env.PUBLIC_URL}>
       <Routes>
         <Route path="/" element={<Chatpage userId={userId} setUserId={setUserId} onLogout={handleLogout} />} />
         <Route path="/admin" element={
