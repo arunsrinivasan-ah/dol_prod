@@ -63,7 +63,7 @@ function App() {
   }
 
   return userId ? (
-    <Router basename={process.env.PUBLIC_URL}>
+    <Router basename={process.env.PUBLIC_URL || "/"}>
       <Routes>
         <Route path="/" element={<Chatpage userId={userId} setUserId={setUserId} onLogout={handleLogout} />} />
         <Route path="/admin" element={
@@ -75,6 +75,7 @@ function App() {
           <Route path="chat-history" element={<ChatHistoryAdmin />} />
           <Route path="members" element={<Members />} />
         </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
   ) : (

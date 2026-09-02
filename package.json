@@ -2,7 +2,6 @@
   "name": "dolphin-ui",
   "version": "1.0.10",
   "private": true,
-  "homepage": "/dolphin-rb/ui",
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
