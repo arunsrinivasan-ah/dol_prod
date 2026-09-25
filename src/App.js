@@ -5,6 +5,7 @@ import Login from "./pages/LoginSignup";
 import Chatpage from "./pages/chatpage/Chatpage.jsx";
 import ChatHistoryAdmin from "./pages/ChatHistoryAdmin.jsx";
 import AdminPage from "./pages/admin/AdminPage.jsx";
+import FeedbackPage from "./pages/feedback/FeedbackPage.jsx";
 import './App.css'
 import { logout } from "./api/apiAuth.js";
 
@@ -71,10 +72,12 @@ function App() {
             <AdminPage onLogout={handleLogout} />
             : <Navigate to="/" replace />
         }>
-          <Route index element={<Navigate to="chat-history" replace />} />
+          <Route index element={<Navigate to="feedback" replace />} />
+          <Route path="feedback" element={<FeedbackPage />} />
           <Route path="chat-history" element={<ChatHistoryAdmin />} />
           <Route path="members" element={<Members />} />
         </Route>
+        <Route path="/feedback" element={<FeedbackPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

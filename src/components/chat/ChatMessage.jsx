@@ -3,15 +3,7 @@ import {
   Box,
   Typography,
   Avatar,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  TextField,
-  Snackbar,
-  Alert,
+
 } from "@mui/material";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
@@ -24,10 +16,25 @@ import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import { ImageIcon } from "../../assets/svgIcons/ImageIcon";
 import { DocumentIcon } from "../../assets/svgIcons/DocumentIcon";
 import MediaPreviewModal from "./MediaPreviewModal";
-import ThumbUpOffAltIcon from "@mui/icons-material/ThumbUpOffAlt";
-import ThumbDownOffAltIcon from "@mui/icons-material/ThumbDownOffAlt";
-import Tooltip from "@mui/material/Tooltip";
-import CloseIcon from "@mui/icons-material/Close";
+import FeedbackRatingButtons from "./FeedbackRatingButtons";
+
+const APP_URL = process.env.REACT_APP_BASE_URL || "http://localhost:8000";
+
+const resolveImageUrl = (rawUrl) => {
+  if (!rawUrl || typeof rawUrl !== "string") return "";
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("data:")) return trimmed;
+
+  // Match /storage/images/... or /storage/pdf_images/... (regardless of domain or relative path)
+  const storageMatch = trimmed.match(/(\/storage\/(?:images|pdf_images)\/[^?\s]+)/i);
+  if (storageMatch) {
+    const cleanPath = storageMatch[1];
+    return `${APP_URL.replace(/\/+$/, "")}${cleanPath}`;
+  }
+
+  return trimmed;
+};
 
 // ─── Normalisers ───
 const normalizeVideo = (v) => ({
@@ -36,11 +43,22 @@ const normalizeVideo = (v) => ({
   thumbnail: v.thumbnail || v.Thumbnail || "",
 });
 
-const normalizeImage = (img) => ({
-  title: img.title || img.Title || "",
-  url: img.url || img.Url || "",
-  thumbnail: img.thumbnail || img.Url || img.url || "",
-});
+const normalizeImage = (img) => {
+  const rawUrl =
+    img.url ||
+    img.Url ||
+    (img.base64
+      ? img.base64.startsWith("data:")
+        ? img.base64
+        : `data:image/${img.format || "jpeg"};base64,${img.base64}`
+      : "");
+  const resolved = resolveImageUrl(rawUrl);
+  return {
+    title: img.title || img.Title || "",
+    url: resolved,
+    thumbnail: resolved,
+  };
+};
 
 const normalizePdf = (pdf) => ({
   title: pdf.title || pdf.Title || "",
@@ -72,33 +90,45 @@ export const markdownContainerSx = {
   "& h2": { fontSize: "1.2em" },
   "& h3": { fontSize: "1.05em" },
 
-  // Lists — each item clearly on its own line
+  // Lists — clean, aligned spacing
   "& ol": {
-    mt: "0.4em",
-    mb: "0.65em",
-    pl: "1.6em",
+    mt: "0.35em",
+    mb: "0.6em",
+    pl: "1.4em",
     listStyleType: "decimal",
     "&:last-child": { mb: 0 },
   },
   "& ul": {
-    mt: "0.4em",
-    mb: "0.65em",
-    pl: "1.6em",
+    mt: "0.35em",
+    mb: "0.6em",
+    pl: "1.4em",
     listStyleType: "disc",
     "&:last-child": { mb: 0 },
   },
   "& li": {
     display: "list-item",
-    mb: "0.4em",
+    mb: "0.35em",
     lineHeight: 1.65,
     "&:last-child": { mb: 0 },
   },
-  "& li > ul, & li > ol": {
+  "& li > ul": {
     mt: "0.25em",
-    mb: 0,
+    mb: "0.35em",
+    pl: "1.3em",
+    listStyleType: "circle",
+  },
+  "& li > ol": {
+    mt: "0.25em",
+    mb: "0.35em",
+    pl: "1.3em",
+    listStyleType: "lower-alpha",
+  },
+  "& li > ul > li > ul": {
+    listStyleType: "square",
   },
   "& li > p": {
-    mb: 0,
+    mt: 0,
+    mb: "0.25em",
   },
 
   // Inline code
@@ -150,37 +180,10 @@ export const markdownContainerSx = {
   "& em": { fontStyle: "italic" },
 };
 
-// ── Thinking animation ───
-const InlineThinkingAnimation = () => (
-  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
-    <Typography variant="body2" sx={{ color: "#1cb0f6", fontWeight: 500 }}>
-      Dolphin is thinking
-    </Typography>
-    <Box sx={{ display: "flex", alignItems: "center", gap: "5px", height: 20 }}>
-      {[0, 1, 2].map((i) => (
-        <Box
-          key={i}
-          sx={{
-            width: 7,
-            height: 7,
-            borderRadius: "50%",
-            backgroundColor: "#1cb0f6",
-            animation: "typingDot 1.2s infinite ease-in-out",
-            animationDelay: `${i * 0.2}s`,
-            "@keyframes typingDot": {
-              "0%, 100%": { opacity: 0.25, transform: "scale(0.8)" },
-              "50%": { opacity: 1, transform: "scale(1.2)" },
-            },
-          }}
-        />
-      ))}
-    </Box>
-  </Box>
-);
-
 // ─── ChatMessage ──
 const ChatMessage = ({
   msg,
+  userQuestion = "",
   videos_suggestions,
   images_suggestions,
   pdf_suggestions,
@@ -316,10 +319,29 @@ const ChatMessage = ({
     .filter((p) => p.link);
 
   const questionSuggestions = msg.question_suggestions || [];
+  
+  const isOutOfScope =
+    msg.metadata?.out_of_scope === true ||
+    msg.category === "FALLBACK" ||
+    msg.category === "OFF_TOPIC" ||
+    (typeof msg.content === "string" && (
+      msg.content.toLowerCase().includes("outside the marine training curriculum") ||
+      msg.content.toLowerCase().includes("outside the maritime curriculum") ||
+      msg.content.toLowerCase().includes("specialized exclusively in maritime")
+    ));
+
   const shouldShowMedia =
-    msg.mediaLoaded !== false && msg.content && msg.content.length > 0;
+    !isOutOfScope &&
+    msg.mediaLoaded !== false &&
+    msg.content &&
+    msg.content.length > 0;
   const shouldShowQuestions =
     msg.mediaLoaded !== false && questionSuggestions.length > 0;
+
+  const sanitizeDisplayContent = (content) => {
+    if (!content || typeof content !== "string") return "";
+    return content.replace(/^(?:#{1,6}\s*|\*{2})?(?:Out of Scope|Off Topic)(?:\*{2})?[:\s]*\n*/i, "");
+  };
 
   const getFormattedTime = (timestamp) => {
     if (!timestamp) return "";
@@ -506,7 +528,7 @@ const ChatMessage = ({
                         overflowWrap: "break-word",
                       }}
                     >
-                      {cleanPlainText(msg.content || "")}
+                      {cleanPlainText(sanitizeDisplayContent(msg.content || ""))}
                     </Typography>
                   ) : (
                     <Box
@@ -518,7 +540,7 @@ const ChatMessage = ({
                       }}
                       dangerouslySetInnerHTML={{
                         __html: sanitizeMarkdown(
-                          msg.content || "",
+                          sanitizeDisplayContent(msg.content || ""),
                           skipMarkdownFormatting
                         ).replace(
                           /(?:@@SOURCE_REF_|\[\[\s*Ref:?\s*)(\d+)\s*(?:@@|\]\])/gi,
@@ -527,12 +549,6 @@ const ChatMessage = ({
                       }}
                     />
                   )}
-
-                  {/* Inline thinking animation */}
-                  {msg.content &&
-                    msg.content.includes("Dolphin is thinking...") && (
-                      <InlineThinkingAnimation />
-                    )}
                 </Box>
 
                 {/* Company Content section */}
@@ -605,9 +621,25 @@ const ChatMessage = ({
                         alt={img.title}
                         sx={mediaThumbnailSx}
                         onError={(e) => {
-                          console.log("IMAGE LOAD FAILED", img);
+                          e.target.style.display = "none";
+                          const fallback = e.target.nextElementSibling;
+                          if (fallback && fallback.classList.contains("fallback-image-icon-container")) {
+                            fallback.style.display = "flex";
+                          }
                         }}
                       />
+                      <Box
+                        className="fallback-image-icon-container"
+                        sx={{
+                          ...mediaThumbnailSx,
+                          display: "none",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: "background.paper",
+                        }}
+                      >
+                        <ImageIcon size={40} color="primary.main" />
+                      </Box>
 
                       <Typography variant="caption" sx={mediaCaptionSx}>
                         {img.title}
@@ -827,7 +859,7 @@ const ChatMessage = ({
             )}
 
             {(() => {
-              if (!msg.checkLicCoursesData || !Array.isArray(msg.checkLicCoursesData) || msg.checkLicCoursesData.length === 0) return null;
+              if (isOutOfScope || !msg.checkLicCoursesData || !Array.isArray(msg.checkLicCoursesData) || msg.checkLicCoursesData.length === 0) return null;
 
               const userType = msg.checkLicCoursesData[0]?.user_type?.toLowerCase() || "";
               const isStudent = userType === "student";
@@ -958,62 +990,26 @@ const ChatMessage = ({
                 </Box>
               </Box>
             )}
-          </Box>
 
-          {/* Like/Dislike Icons - only shown after full response is received */}
-          {!isUser &&
-            msg.mediaLoaded !== false &&
-            msg.content &&
-            msg.content.trim().length > 0 && (
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.5,
-                  mt: 0.5,
-                  ml: 0.5,
-                  opacity: 0.6,
-                  transition: "opacity 0.2s ease",
-                  "&:hover": {
-                    opacity: 1,
-                  },
-                }}
-              >
-                <Tooltip title={feedback === "like" ? "Remove like" : "Like"}>
-                  <IconButton
-                    size="small"
-                    onClick={() => handleLikeDislike("like")}
-                    disabled={feedback === "dislike"}
-                    sx={{
-                      color:
-                        feedback === "like" ? "success.main" : "text.secondary",
-                      p: 0.5,
-                      opacity: feedback === "dislike" ? 0.3 : 1,
-                    }}
-                  >
-                    <ThumbUpOffAltIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-
-                <Tooltip title={feedback === "dislike" ? "Dislike" : "Dislike"}>
-                  <IconButton
-                    size="small"
-                    onClick={() => handleLikeDislike("dislike")}
-                    disabled={feedback === "like"}
-                    sx={{
-                      color:
-                        feedback === "dislike"
-                          ? "error.main"
-                          : "text.secondary",
-                      p: 0.5,
-                      opacity: feedback === "like" ? 0.3 : 1,
-                    }}
-                  >
-                    <ThumbDownOffAltIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
+            {/* Feedback Rating Buttons (Thumbs Up / Down) */}
+            {!isUser && !isStreaming && msg.content && (
+              <Box sx={{ mt: 1.5, display: "flex", alignItems: "center" }}>
+                <FeedbackRatingButtons
+                  question={userQuestion || msg.question || ""}
+                  originalResponse={typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content)}
+                  conversationId={sessionId}
+                  messageId={messageIndex + 1}
+                  companyId={localStorage.getItem("company_id") || localStorage.getItem("companyId")}
+                  shipType={localStorage.getItem("ship_type") || localStorage.getItem("shipType")}
+                  sourceMetadata={{
+                    category: msg.category || msg.router_decision?.category,
+                    sections: msg.sections,
+                    chunks_used: msg.chunks_used,
+                  }}
+                />
               </Box>
             )}
+          </Box>
         </Box>
 
         <MediaPreviewModal
@@ -1023,120 +1019,6 @@ const ChatMessage = ({
           onClose={closePreview}
         />
       </Box>
-
-      {/* Comment Dialog */}
-      <Dialog
-        open={commentDialogOpen}
-        onClose={handleCloseCommentDialog}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            bgcolor: "background.paper",
-          },
-        }}
-      >
-        <DialogTitle
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            pb: 1,
-            borderBottom: "1px solid",
-            borderColor: "divider",
-          }}
-        >
-          <Typography variant="h4" sx={{ fontWeight: 600 }}>
-            Tell us what went wrong
-          </Typography>
-          <IconButton
-            onClick={handleCloseCommentDialog}
-            size="small"
-            sx={{ color: "text.secondary" }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-
-        <DialogContent sx={{ mt: 2 }}>
-          <Typography variant="body2" sx={{ color: "text.secondary", mb: 2 }}>
-            Please share what was wrong with this response. Your feedback helps
-            us to improve.
-          </Typography>
-
-          <TextField
-            autoFocus
-            multiline
-            rows={4}
-            fullWidth
-            variant="outlined"
-            placeholder="Type your comment here..."
-            value={commentText}
-            onChange={(e) => setCommentText(e.target.value)}
-            sx={{
-              "& .MuiOutlinedInput-root": {
-                borderRadius: 2,
-                backgroundColor: "background.light",
-                "& textarea": {
-                  fontSize: 14,
-                  lineHeight: 1.6,
-                },
-              },
-            }}
-          />
-        </DialogContent>
-
-        <DialogActions sx={{ p: 2, pt: 0, gap: 1 }}>
-          <Button
-            onClick={handleCloseCommentDialog}
-            variant="outlined"
-            sx={{
-              textTransform: "none",
-              borderRadius: 2,
-              px: 2,
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSubmitComment}
-            variant="contained"
-            disabled={!commentText.trim() || isSubmittingComment}
-            sx={{
-              textTransform: "none",
-              borderRadius: 2,
-              px: 3,
-              bgcolor: "primary.main",
-              "&:hover": {
-                bgcolor: "primary.dark",
-              },
-              "&.Mui-disabled": {
-                opacity: 0.5,
-              },
-            }}
-          >
-            {isSubmittingComment ? "Submitting..." : "Submit Comment"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Comment Success/Failure Popup */}
-      <Snackbar
-        open={commentPopup.open}
-        autoHideDuration={3000}
-        onClose={() => setCommentPopup({ ...commentPopup, open: false })}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Alert
-          onClose={() => setCommentPopup({ ...commentPopup, open: false })}
-          severity={commentPopup.severity}
-          variant="filled"
-          sx={{ width: "100%", borderRadius: 2 }}
-        >
-          {commentPopup.message}
-        </Alert>
-      </Snackbar>
     </>
   );
 };

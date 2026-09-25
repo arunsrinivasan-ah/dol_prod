@@ -56,7 +56,7 @@ export const sendMessage = async (
   sessionId,
   messageText,
   signal,
-  { onContentToken, onSuggestions, onMedia, onTopic, onError, onDone, onCompanyContent, onTranscriptResult, onCheckLicCourses } = {},
+  { onContentToken, onSuggestions, onMedia, onTopic, onError, onDone, onCompanyContent, onTranscriptResult, onCheckLicCourses, onStatus } = {},
 ) => {
   const userId = localStorage.getItem("user_id");
   const role = localStorage.getItem("role");
@@ -126,6 +126,11 @@ export const sendMessage = async (
       }
 
       switch (event.type) {
+        // Status updates (thinking, fetching, generating)
+        case "status":
+          onStatus?.(event.message || event.stage || "Dolphin is thinking...");
+          break;
+
         // Ignore rewrite stream
         case "rewrite_token":
         case "rewrite_done":

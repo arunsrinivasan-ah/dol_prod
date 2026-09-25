@@ -30,6 +30,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
 import CloseIcon from "@mui/icons-material/Close";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import StopRoundedIcon from "@mui/icons-material/StopRounded";
 
 const formatGlossaryContent = (content) => {
   if (!content) return "";
@@ -82,14 +83,6 @@ export const formatMarkdownContent = (content) => {
     "$1### $2\n\n",
   );
 
-  // Format numbered lists: ensure "1. ", "2. " start on new lines
-  formatted = formatted.replace(/([^\n])[ \t]+(\d+[\.\)])[ \t]+/g, "$1\n$2 ");
-  formatted = formatted.replace(/^\s*(\d+)[\.\)]\s+/gm, "$1. ");
-
-  // Bullet lists: ensure "• " or "- " start on new lines
-  formatted = formatted.replace(/([^\n])[ \t]+([•\-\*])[ \t]+/g, "$1\n- ");
-  formatted = formatted.replace(/^\s*[•\-\*]\s+/gm, "- ");
-
   // Fix inline numbered steps in parentheses (1) -> 1.
   formatted = formatted.replace(/(?:^|[ \t]+)\((\d+)\)[ \t]+/g, "\n$1. ");
 
@@ -113,6 +106,62 @@ export const formatMarkdownContent = (content) => {
 
   // Ensure specific terms requested by user are always bolded
   formatted = formatted.replace(/\b(company name|vessel name|course name)\b/gi, "**$1**");
+
+  // Structure lists and sub-bullet indentation cleanly
+  const rawLines = formatted.split(/\r?\n/);
+  const processedLines = [];
+  let inNumberedContext = false;
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const rawLine = rawLines[i];
+    const trimmed = rawLine.trim();
+
+    // Check if line is a numbered item e.g. "1. Item" or "1) Item"
+    const numMatch = rawLine.match(/^(\s*)(\d+)[\.\)]\s+(.*)$/);
+    // Check if line is a bullet item e.g. "- item", "* item", "• item"
+    const bulletMatch = rawLine.match(/^(\s*)[•\-\*\⁃\◦\▪\▫\–]\s+(.*)$/);
+
+    if (numMatch) {
+      inNumberedContext = true;
+      processedLines.push(`${numMatch[2]}. ${numMatch[3]}`);
+    } else if (bulletMatch) {
+      const existingIndent = bulletMatch[1] || "";
+      const text = bulletMatch[2];
+      if (inNumberedContext) {
+        // Nested sub-bullet under a numbered list item
+        processedLines.push(`   - ${text}`);
+      } else if (existingIndent.length >= 2) {
+        // Retain existing sub-bullet indentation
+        processedLines.push(`   - ${text}`);
+      } else {
+        // Standard top-level bullet point
+        processedLines.push(`- ${text}`);
+      }
+    } else if (trimmed === "") {
+      // Lookahead: if next non-empty line is a bullet and we're in a numbered item, omit empty line to keep list tight
+      let nextIsBullet = false;
+      for (let j = i + 1; j < rawLines.length; j++) {
+        const nextTrimmed = rawLines[j].trim();
+        if (nextTrimmed !== "") {
+          nextIsBullet = /^[•\-\*\⁃\◦\▪\▫\–]\s+/.test(nextTrimmed);
+          break;
+        }
+      }
+      if (inNumberedContext && nextIsBullet) {
+        // Skip blank line between numbered item and its sub-bullets
+        continue;
+      }
+      processedLines.push("");
+    } else {
+      // Regular text or heading
+      if (/^(?:#{1,6}\s+|[A-Z][a-z]|Note:|Important:)/.test(trimmed)) {
+        inNumberedContext = false;
+      }
+      processedLines.push(rawLine);
+    }
+  }
+
+  formatted = processedLines.join("\n");
 
   // Remove excessive blank lines
   formatted = formatted.replace(/\n{3,}/g, "\n\n");
@@ -205,14 +254,9 @@ const ChatWindow = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [liveMessage, setLiveMessage] = useState(EMPTY_LIVE);
-  const [showUnderstanding, setShowUnderstanding] = useState(false);
-  const [understandingContent, setUnderstandingContent] = useState("");
-  const [showThinkingBetween, setShowThinkingBetween] = useState(false);
   const [showInitialThinking, setShowInitialThinking] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("Dolphin is thinking...");
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
-  const [waitingForNextChunk, setWaitingForNextChunk] = useState(false);
-  const [showContentGap, setShowContentGap] = useState(false);
-  const [showUnderstandingGap, setShowUnderstandingGap] = useState(false);
   const [savedSessions, setSavedSessions] = useState([]);
   const [saveDialog, setSaveDialog] = useState({
     open: false,
@@ -240,19 +284,12 @@ const ChatWindow = ({
   const containerRef = useRef(null);
   const bottomRef = useRef(null);
   const abortControllerRef = useRef(null);
+  const statusTimerRef = useRef(null);
   const alreadyCommittedRef = useRef(false);
   const userScrolledRef = useRef(false);
-  const tokenQueueRef = useRef([]);
-  const typingIntervalRef = useRef(null);
-  const isTypingRef = useRef(false);
   const hasContentStartedRef = useRef(false);
-  const understandingDoneRef = useRef(false);
-  const understandingReceivedRef = useRef(false);
-  const initialThinkingHiddenRef = useRef(false);
   const sidebarLoadedRef = useRef(false);
-  const initialThinkingTimeoutRef = useRef(null);
   const accRef = useRef(EMPTY_ACC());
-  const understandingAccRef = useRef("");
 
   // ── Sync session messages ────
   useEffect(() => {
@@ -274,12 +311,8 @@ const ChatWindow = ({
     liveMessage.content,
     liveMessage.active,
     autoScrollEnabled,
-    understandingContent,
-    showUnderstanding,
     showInitialThinking,
-    showThinkingBetween,
-    showContentGap,
-    showUnderstandingGap,
+    statusMessage,
   ]);
 
   useEffect(() => {
@@ -297,37 +330,6 @@ const ChatWindow = ({
     };
     el.addEventListener("scroll", onScroll);
     return () => el.removeEventListener("scroll", onScroll);
-  }, []);
-
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        if (typingIntervalRef.current) {
-          clearInterval(typingIntervalRef.current);
-          typingIntervalRef.current = null;
-        }
-        if (tokenQueueRef.current && tokenQueueRef.current.length > 0) {
-          while (tokenQueueRef.current.length > 0) {
-            const nextToken = tokenQueueRef.current.shift();
-            if (nextToken.type === 'content') {
-              accRef.current.content += nextToken.text;
-            } else if (nextToken.type === 'company_content') {
-              accRef.current.company_content += nextToken.text;
-            }
-          }
-          setLiveMessage((prev) => ({
-            ...prev,
-            active: true,
-            content: accRef.current.content,
-            company_content: accRef.current.company_content,
-          }));
-        }
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
   }, []);
 
   // ── Saved sessions ──
@@ -355,17 +357,50 @@ const ChatWindow = ({
 
   // ── Shared UI reset (called by both handleStop and onDone/onError) ─────────
   const resetStreamingUI = useCallback(() => {
+    if (statusTimerRef.current) {
+      clearInterval(statusTimerRef.current);
+      statusTimerRef.current = null;
+    }
     setLiveMessage(EMPTY_LIVE);
-    setShowUnderstanding(false);
-    setUnderstandingContent("");
     setShowInitialThinking(false);
-    setShowThinkingBetween(false);
-    setWaitingForNextChunk(false);
-    setShowContentGap(false);
-    setShowUnderstandingGap(false);
+    setStatusMessage("Dolphin is thinking...");
     setIsStreaming(false);
     setDisableNewChat(false);
   }, [setDisableNewChat]);
+
+  // ── Termination / Stop Chat handler ──
+  const handleStop = useCallback(() => {
+    if (statusTimerRef.current) {
+      clearInterval(statusTimerRef.current);
+      statusTimerRef.current = null;
+    }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    alreadyCommittedRef.current = true;
+    const acc = accRef.current;
+    if (acc.content || acc.company_content) {
+      setmessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: acc.content,
+          company_content: acc.company_content,
+          videos: acc.media.videos || [],
+          images: acc.media.images || [],
+          pdfs: acc.media.pdfs || [],
+          topics: acc.topics || [],
+          transcripts: acc.transcripts || [],
+          question_suggestions: acc.suggestions || [],
+          checkLicCoursesData: acc.checkLicCoursesData,
+          timestamp: new Date().toISOString(),
+          mediaLoaded: true,
+        },
+      ]);
+    }
+    accRef.current = EMPTY_ACC();
+    resetStreamingUI();
+  }, [resetStreamingUI, setmessages]);
 
   // Handle topic click
   const handleTopicClick = useCallback(
@@ -421,22 +456,8 @@ const ChatWindow = ({
 
       alreadyCommittedRef.current = false;
       accRef.current = EMPTY_ACC();
-      understandingAccRef.current = "";
-      understandingDoneRef.current = false;
-      understandingReceivedRef.current = false;
       hasContentStartedRef.current = false;
-      initialThinkingHiddenRef.current = false;
       sidebarLoadedRef.current = false;
-      tokenQueueRef.current = [];
-
-      if (initialThinkingTimeoutRef.current) {
-        clearTimeout(initialThinkingTimeoutRef.current);
-        initialThinkingTimeoutRef.current = null;
-      }
-      if (typingIntervalRef.current) {
-        clearInterval(typingIntervalRef.current);
-        typingIntervalRef.current = null;
-      }
 
       setmessages((prev = []) => [
         ...prev,
@@ -453,20 +474,30 @@ const ChatWindow = ({
       setAutoScrollEnabled(true);
       userScrolledRef.current = false;
 
+      setStatusMessage("Dolphin is thinking...");
       setShowInitialThinking(true);
-      setShowUnderstanding(true);
-      setUnderstandingContent("");
-      setShowThinkingBetween(false);
       setLiveMessage({ ...EMPTY_LIVE, active: false });
-      setShowContentGap(false);
-      setShowUnderstandingGap(false);
 
-      initialThinkingTimeoutRef.current = setTimeout(() => {
-        if (!initialThinkingHiddenRef.current) {
-          initialThinkingHiddenRef.current = true;
-          setShowInitialThinking(false);
+      // Progressive fallback timer to ensure status keeps moving if network has latency
+      let statusStep = 0;
+      const statusTimer = setInterval(() => {
+        statusStep += 1;
+        if (statusStep === 1) {
+          setStatusMessage((prev) =>
+            prev === "Dolphin is thinking..."
+              ? "Dolphin is fetching relevant information..."
+              : prev
+          );
+        } else if (statusStep >= 3) {
+          setStatusMessage((prev) =>
+            prev === "Dolphin is thinking..." ||
+            prev === "Dolphin is fetching relevant information..."
+              ? "Dolphin is generating response..."
+              : prev
+          );
         }
-      }, 33000);
+      }, 2500);
+      statusTimerRef.current = statusTimer;
 
       try {
         const sessionId = currentSessionId
@@ -488,61 +519,17 @@ const ChatWindow = ({
           messageText,
           abortControllerRef.current.signal,
           {
+            onStatus: (msg) => {
+              if (msg) {
+                setStatusMessage(msg);
+              }
+            },
+
             onContentToken: (token, streamType) => {
-              if (
-                streamType === "rewrite_token" ||
-                streamType === "understanding_token"
-              ) {
-                understandingReceivedRef.current = true;
-
-                if (!initialThinkingHiddenRef.current) {
-                  initialThinkingHiddenRef.current = true;
-                  setShowInitialThinking(false);
-
-                  if (initialThinkingTimeoutRef.current) {
-                    clearTimeout(initialThinkingTimeoutRef.current);
-                    initialThinkingTimeoutRef.current = null;
-                  }
-                }
-
-                understandingAccRef.current += token;
-                setUnderstandingContent(understandingAccRef.current);
-                return;
-              }
-
-              if (
-                streamType === "understanding_done" ||
-                streamType === "rewrite_done"
-              ) {
-                understandingDoneRef.current = true;
-                setShowInitialThinking(false);
-                setShowThinkingBetween(true);
-                setShowUnderstandingGap(true);
-                setTimeout(() => {
-                  setShowUnderstanding(false);
-                }, 500);
-                return;
-              }
-
               if (streamType === "content") {
-                if (
-                  !understandingReceivedRef.current &&
-                  !initialThinkingHiddenRef.current
-                ) {
-                  initialThinkingHiddenRef.current = true;
-                  setShowInitialThinking(false);
-
-                  if (initialThinkingTimeoutRef.current) {
-                    clearTimeout(initialThinkingTimeoutRef.current);
-                    initialThinkingTimeoutRef.current = null;
-                  }
-                }
-
+                clearInterval(statusTimer);
+                setShowInitialThinking(false);
                 hasContentStartedRef.current = true;
-                setShowThinkingBetween(false);
-                setWaitingForNextChunk(false);
-                setShowUnderstandingGap(false);
-                setShowContentGap(true);
 
                 if (
                   !sidebarLoadedRef.current &&
@@ -555,46 +542,22 @@ const ChatWindow = ({
                     setActiveIndex?.(0);
                   }, 300);
                 }
-              }
 
-              let cleanedToken = token;
-
-              if (document.hidden) {
-                accRef.current.content += cleanedToken;
+                accRef.current.content += token;
                 setLiveMessage((prev) => ({
                   ...prev,
                   active: true,
                   content: accRef.current.content,
                 }));
-              } else {
-                tokenQueueRef.current.push({ type: 'content', text: cleanedToken });
-
-                if (!typingIntervalRef.current) {
-                  typingIntervalRef.current = setInterval(() => {
-                    if (tokenQueueRef.current.length === 0) {
-                      isTypingRef.current = false;
-                      if (!hasContentStartedRef.current)
-                        setWaitingForNextChunk(true);
-                      return;
-                    }
-
-                    isTypingRef.current = true;
-                    const nextToken = tokenQueueRef.current.shift();
-                    if (nextToken.type === 'content') {
-                      accRef.current.content += nextToken.text;
-                    } else if (nextToken.type === 'company_content') {
-                      accRef.current.company_content += nextToken.text;
-                    }
-
-                    setLiveMessage((prev) => ({
-                      ...prev,
-                      active: true,
-                      content: accRef.current.content,
-                      company_content: accRef.current.company_content,
-                    }));
-                  }, 60);
-                }
               }
+            },
+
+            onCompanyContent: (contentChunk) => {
+              accRef.current.company_content += contentChunk;
+              setLiveMessage((prev) => ({
+                ...prev,
+                company_content: accRef.current.company_content,
+              }));
             },
 
             onSuggestions: (suggestions) => {
@@ -608,9 +571,6 @@ const ChatWindow = ({
                 images: (rawMedia.images || []).map(normalizeImage),
                 pdfs: (rawMedia.pdfs || []).map(normalizePdf),
               };
-
-              console.log("AFTER NORMALIZE", accRef.current.media.images);
-
               setLiveMessage((prev) => ({
                 ...prev,
                 media: accRef.current.media,
@@ -624,30 +584,9 @@ const ChatWindow = ({
                   : topicData;
 
               if (code && code.trim() && name && name.trim()) {
-                // If we have pending topics, flush them to the queue
-                if (accRef.current.pendingTopics.length > 0) {
-                  accRef.current.pendingTopics.forEach((t) => {
-                    const idx = accRef.current.topics.indexOf(t);
-                    if (idx !== -1) {
-                      // Push to queue so it stays in sequence with words
-                      tokenQueueRef.current.push({
-                        type: 'content',
-                        text: ` @@SOURCE_REF_${idx + 1}@@\n\n`,
-                      });
-                    }
-                  });
-                  accRef.current.pendingTopics = [];
-                }
-
                 if (!accRef.current.topics.includes(code)) {
                   accRef.current.topics.push(code);
                 }
-
-                // Add to current pending block
-                if (!accRef.current.pendingTopics.includes(code)) {
-                  accRef.current.pendingTopics.push(code);
-                }
-
                 setLiveMessage((prev) => ({
                   ...prev,
                   topics: [...accRef.current.topics],
@@ -663,43 +602,6 @@ const ChatWindow = ({
               }));
             },
 
-            onCompanyContent: (contentChunk) => {
-              if (document.hidden) {
-                accRef.current.company_content += contentChunk;
-                setLiveMessage((prev) => ({
-                  ...prev,
-                  company_content: accRef.current.company_content,
-                }));
-              } else {
-                tokenQueueRef.current.push({ type: 'company_content', text: contentChunk });
-                if (!typingIntervalRef.current) {
-                  typingIntervalRef.current = setInterval(() => {
-                    if (tokenQueueRef.current.length === 0) {
-                      isTypingRef.current = false;
-                      if (!hasContentStartedRef.current)
-                        setWaitingForNextChunk(true);
-                      return;
-                    }
-
-                    isTypingRef.current = true;
-                    const nextToken = tokenQueueRef.current.shift();
-                    if (nextToken.type === 'content') {
-                      accRef.current.content += nextToken.text;
-                    } else if (nextToken.type === 'company_content') {
-                      accRef.current.company_content += nextToken.text;
-                    }
-
-                    setLiveMessage((prev) => ({
-                      ...prev,
-                      active: true,
-                      content: accRef.current.content,
-                      company_content: accRef.current.company_content,
-                    }));
-                  }, 80);
-                }
-              }
-            },
-
             onTranscriptResult: (chunks) => {
               accRef.current.transcripts = chunks;
               setLiveMessage((prev) => ({
@@ -709,17 +611,8 @@ const ChatWindow = ({
             },
 
             onError: (errMsg) => {
+              clearInterval(statusTimer);
               console.error("SSE error:", errMsg);
-
-              if (initialThinkingTimeoutRef.current) {
-                clearTimeout(initialThinkingTimeoutRef.current);
-                initialThinkingTimeoutRef.current = null;
-              }
-              if (typingIntervalRef.current) {
-                clearInterval(typingIntervalRef.current);
-                typingIntervalRef.current = null;
-              }
-
               setmessages((prev) => [
                 ...prev,
                 {
@@ -737,82 +630,11 @@ const ChatWindow = ({
             },
 
             onDone: async () => {
-              if (initialThinkingTimeoutRef.current) {
-                clearTimeout(initialThinkingTimeoutRef.current);
-                initialThinkingTimeoutRef.current = null;
-              }
-
-              // Flush remaining pending topics before waiting for the queue
-              if (accRef.current.pendingTopics.length > 0) {
-                accRef.current.pendingTopics.forEach((t) => {
-                  const idx = accRef.current.topics.indexOf(t);
-                  if (idx !== -1) {
-                    tokenQueueRef.current.push({
-                      type: 'content',
-                      text: ` @@SOURCE_REF_${idx + 1}@@\n\n`,
-                    });
-                  }
-                });
-                accRef.current.pendingTopics = [];
-              }
-
+              clearInterval(statusTimer);
               setShowInitialThinking(false);
-              setShowThinkingBetween(false);
-              setShowUnderstandingGap(false);
-
-              if (!understandingReceivedRef.current) {
-                setShowUnderstanding(false);
-              }
-
-              await new Promise((resolve) => {
-                const drainAndResolve = () => {
-                  while (tokenQueueRef.current.length > 0) {
-                    const nextToken = tokenQueueRef.current.shift();
-                    if (nextToken.type === 'content') {
-                      accRef.current.content += nextToken.text;
-                    } else if (nextToken.type === 'company_content') {
-                      accRef.current.company_content += nextToken.text;
-                    }
-                  }
-                  setLiveMessage((prev) => ({
-                    ...prev,
-                    active: true,
-                    content: accRef.current.content,
-                    company_content: accRef.current.company_content,
-                  }));
-                  if (typingIntervalRef.current) {
-                    clearInterval(typingIntervalRef.current);
-                    typingIntervalRef.current = null;
-                  }
-                  resolve();
-                };
-
-                if (document.hidden) {
-                  drainAndResolve();
-                  return;
-                }
-
-                const checkQueue = setInterval(() => {
-                  if (document.hidden) {
-                    clearInterval(checkQueue);
-                    drainAndResolve();
-                    return;
-                  }
-
-                  if (tokenQueueRef.current.length === 0) {
-                    clearInterval(checkQueue);
-                    if (typingIntervalRef.current) {
-                      clearInterval(typingIntervalRef.current);
-                      typingIntervalRef.current = null;
-                    }
-                    resolve();
-                  }
-                }, 50);
-              });
 
               if (!alreadyCommittedRef.current) {
                 const acc = accRef.current;
-
                 setmessages((prev) => [
                   ...prev,
                   {
@@ -833,27 +655,16 @@ const ChatWindow = ({
               }
 
               accRef.current = EMPTY_ACC();
-              understandingAccRef.current = "";
-              understandingReceivedRef.current = false;
               resetStreamingUI();
               fetchSessions?.("", true);
             },
           },
         );
       } catch (err) {
+        clearInterval(statusTimer);
         if (err.name === "AbortError" || err.name === "CanceledError") return;
 
         console.error("handleSend error:", err);
-
-        if (initialThinkingTimeoutRef.current) {
-          clearTimeout(initialThinkingTimeoutRef.current);
-          initialThinkingTimeoutRef.current = null;
-        }
-        if (typingIntervalRef.current) {
-          clearInterval(typingIntervalRef.current);
-          typingIntervalRef.current = null;
-        }
-
         setmessages((prev) => [
           ...prev,
           {
@@ -920,12 +731,12 @@ const ChatWindow = ({
   };
 
   // ── Sub-components ──
-  const InitialThinkingBubble = () => (
+  const ProcessStatusBubble = ({ message }) => (
     <Box
       sx={{
         display: "flex",
         alignItems: "center",
-        gap: 1,
+        gap: 1.5,
         width: "fit-content",
         animation: "fadeIn 0.25s ease-in",
         "@keyframes fadeIn": {
@@ -943,6 +754,7 @@ const ChatWindow = ({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
         }}
       >
         <Box
@@ -959,27 +771,40 @@ const ChatWindow = ({
               "50%": { transform: "translateY(0px) rotate(0deg)" },
               "75%": { transform: "translateY(3px) rotate(10deg)" },
               "100%": { transform: "translateY(0px) rotate(0deg)" },
-            }
+            },
           }}
         />
       </Box>
       <Box
         sx={{
-          px: 2,
-          py: 1.5,
+          px: 2.2,
+          py: 1.4,
           borderRadius: 3,
           backgroundColor: "background.chatbackground",
           color: "primary.main",
           fontWeight: 500,
           fontSize: 14,
+          display: "flex",
+          alignItems: "center",
+          gap: 0.5,
+          boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
         }}
       >
-        Dolphin is thinking
+        <Typography
+          component="span"
+          sx={{
+            fontSize: 14,
+            fontWeight: 500,
+            color: "primary.main",
+          }}
+        >
+          {message || "Dolphin is thinking..."}
+        </Typography>
         <Box
           component="span"
           sx={{
             display: "inline-flex",
-            ml: 0.5,
+            ml: 0.2,
             "& span": { animation: "blink 1.4s infinite both" },
             "& span:nth-of-type(2)": { animationDelay: "0.2s" },
             "& span:nth-of-type(3)": { animationDelay: "0.4s" },
@@ -1001,9 +826,7 @@ const ChatWindow = ({
   const showWelcome =
     !loading &&
     !liveMessage.active &&
-    !showUnderstanding &&
     !showInitialThinking &&
-    !showThinkingBetween &&
     (messages?.length === 0 || !messages) &&
     activeIndex === null &&
     !currentSessionId;
@@ -1142,111 +965,69 @@ const ChatWindow = ({
             }}
           >
             {/* Committed messages */}
-            {messages?.map((msg, index) => (
-              <ChatMessage
-                key={index}
-                handleSend={handleSend}
-                setSearchQuery={setSearchQuery}
-                sessionId={currentSessionId}
-                msg={msg}
-                messageIndex={index}
-                videos_suggestions={msg?.videos || msg?.video_suggestions || []}
-                images_suggestions={msg?.images || msg?.metadata?.images || []}
-                pdf_suggestions={msg?.pdfs || msg?.metadata?.pdfs || []}
-                onFeedbackSubmit={handleFeedbackSubmit}
-                onTopicClick={(topicCode) =>
-                  handleTopicClick(topicCode, msg.topics)
+            {messages?.map((msg, index) => {
+              let prevQuestion = msg.question || "";
+              if (!prevQuestion && msg.role === "assistant" && index > 0) {
+                for (let j = index - 1; j >= 0; j--) {
+                  if (messages[j]?.role === "user") {
+                    prevQuestion = messages[j]?.content;
+                    break;
+                  }
                 }
-                isStreaming={false}
-              />
-            ))}
+              }
 
-            {/* Initial thinking bubble */}
-            {showInitialThinking && !understandingContent && (
-              <InitialThinkingBubble />
-            )}
-
-            {/* Understanding / rewrite stream */}
-            {showUnderstanding &&
-              understandingContent &&
-              understandingReceivedRef.current && (
-                <>
-                  <ChatMessage
-                    key="understanding"
-                    handleSend={handleSend}
-                    setSearchQuery={setSearchQuery}
-                    sessionId={currentSessionId}
-                    msg={{
-                      role: "assistant",
-                      content: understandingContent,
-                      mediaLoaded: true,
-                      timestamp: new Date().toISOString(),
-                      question_suggestions: [],
-                    }}
-                    videos_suggestions={[]}
-                    images_suggestions={[]}
-                    pdf_suggestions={[]}
-                    isStreaming={false}
-                    skipMarkdownFormatting={true}
-                    plainText={true}
-                  />
-
-                  {showUnderstandingGap && (
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        py: 0.5,
-                        animation: "fadeIn 0.3s ease-in",
-                        "@keyframes fadeIn": {
-                          from: { opacity: 0, transform: "translateY(-6px)" },
-                          to: { opacity: 1, transform: "translateY(0)" },
-                        },
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          width: 60,
-                          height: 2,
-                          backgroundColor: "divider",
-                          borderRadius: 1,
-                        }}
-                      />
-                    </Box>
-                  )}
-                </>
-              )}
-
-            {/* Live answer */}
-            {(liveMessage.active ||
-              (showThinkingBetween &&
-                !showInitialThinking &&
-                !showUnderstanding)) && (
+              return (
                 <ChatMessage
-                  key="live-answer"
+                  key={index}
                   handleSend={handleSend}
                   setSearchQuery={setSearchQuery}
                   sessionId={currentSessionId}
-                  msg={{
-                    role: "assistant",
-                    content: `${liveMessage.content || ""}${waitingForNextChunk ? "\n\nDolphin is thinking..." : ""}`,
-                    company_content: liveMessage.company_content,
-                    mediaLoaded: false,
-                    timestamp: new Date().toISOString(),
-                    question_suggestions: [],
-                    topics: liveMessage.topics,
-                    transcripts: liveMessage.transcripts,
-                  }}
-                  videos_suggestions={liveMessage.media.videos || []}
-                  images_suggestions={liveMessage.media.images || []}
-                  pdf_suggestions={liveMessage.media.pdfs || []}
+                  msg={msg}
+                  userQuestion={prevQuestion}
+                  messageIndex={index}
+                  videos_suggestions={msg?.videos || msg?.video_suggestions || []}
+                  images_suggestions={msg?.images || msg?.metadata?.images || []}
+                  pdf_suggestions={msg?.pdfs || msg?.metadata?.pdfs || []}
+                  onFeedbackSubmit={handleFeedbackSubmit}
                   onTopicClick={(topicCode) =>
-                    handleTopicClick(topicCode, liveMessage.topics)
+                    handleTopicClick(topicCode, msg.topics)
                   }
-                  isStreaming={true}
+                  isStreaming={false}
                 />
-              )}
+              );
+            })}
+
+            {/* Status bubble during thinking / fetching / generating */}
+            {showInitialThinking && !liveMessage.active && (
+              <ProcessStatusBubble message={statusMessage} />
+            )}
+
+            {/* Live streaming answer */}
+            {liveMessage.active && (
+              <ChatMessage
+                key="live-answer"
+                handleSend={handleSend}
+                setSearchQuery={setSearchQuery}
+                sessionId={currentSessionId}
+                msg={{
+                  role: "assistant",
+                  content: liveMessage.content || "",
+                  company_content: liveMessage.company_content,
+                  mediaLoaded: false,
+                  timestamp: new Date().toISOString(),
+                  question_suggestions: [],
+                  topics: liveMessage.topics,
+                  transcripts: liveMessage.transcripts,
+                }}
+                videos_suggestions={liveMessage.media.videos || []}
+                images_suggestions={liveMessage.media.images || []}
+                pdf_suggestions={liveMessage.media.pdfs || []}
+                onTopicClick={(topicCode) =>
+                  handleTopicClick(topicCode, liveMessage.topics)
+                }
+                isStreaming={true}
+              />
+            )}
 
             <div ref={bottomRef} />
           </Box>
@@ -1641,25 +1422,67 @@ const ChatWindow = ({
             />
           </Box>
 
-          <IconButton
-            onClick={() => handleSend()}
-            disabled={isStreaming}
-            sx={{
-              position: "absolute",
-              right: 16,
-              top: "50%",
-              transform: "translateY(-50%)",
-              height: 36,
-              width: 36,
-              borderRadius: 2,
-              opacity: isStreaming ? 0.4 : 1,
-            }}
-          >
-            <SendIcon
-              size={20}
-              color={mode === "dark" ? "#1989D0" : "#106BA3"}
-            />
-          </IconButton>
+          {isStreaming ? (
+            <IconButton
+              onClick={handleStop}
+              aria-label="Stop generating response"
+              title="Stop generating"
+              sx={{
+                position: "absolute",
+                right: 16,
+                top: "50%",
+                transform: "translateY(-50%)",
+                height: 36,
+                width: 36,
+                borderRadius: "50%",
+                backgroundColor:
+                  mode === "dark"
+                    ? "rgba(28, 176, 246, 0.18)"
+                    : "rgba(28, 176, 246, 0.12)",
+                border: "1.5px solid",
+                borderColor: mode === "dark" ? "#1cb0f6" : "#1989D0",
+                color: mode === "dark" ? "#1cb0f6" : "#106BA3",
+                transition: "all 0.2s ease-in-out",
+                "&:hover": {
+                  backgroundColor:
+                    mode === "dark" ? "#1cb0f6" : "#106BA3",
+                  borderColor: mode === "dark" ? "#1cb0f6" : "#106BA3",
+                  color: "#ffffff",
+                  transform: "translateY(-50%) scale(1.08)",
+                },
+              }}
+            >
+              <StopRoundedIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          ) : (
+            <IconButton
+              onClick={() => handleSend()}
+              disabled={!searchQuery.trim()}
+              aria-label="Send message"
+              title="Send"
+              sx={{
+                position: "absolute",
+                right: 16,
+                top: "50%",
+                transform: "translateY(-50%)",
+                height: 36,
+                width: 36,
+                borderRadius: 2,
+                opacity: searchQuery.trim() ? 1 : 0.4,
+                transition: "all 0.2s ease-in-out",
+                "&:hover": {
+                  transform: searchQuery.trim()
+                    ? "translateY(-50%) scale(1.05)"
+                    : "translateY(-50%)",
+                },
+              }}
+            >
+              <SendIcon
+                size={20}
+                color={mode === "dark" ? "#1989D0" : "#106BA3"}
+              />
+            </IconButton>
+          )}
         </Box>
 
         <Typography

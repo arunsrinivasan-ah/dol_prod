@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Typography, List, ListItem, ListItemIcon, ListItemText, ListItemButton } from '@mui/material';
 import HistoryIcon from '@mui/icons-material/History';
 import GroupIcon from '@mui/icons-material/Group';
+import RateReviewIcon from '@mui/icons-material/RateReview';
 import { useThemeMode } from '../../context/ThemeModeContext';
 import { getSidebarWidth } from '../../theme/layoutScale';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -12,6 +13,11 @@ const AdminSidebar = ({ setSidebarOpen }) => {
   const location = useLocation();
 
   const menuItems = [
+    {
+      title: 'Feedback & Learning',
+      icon: <RateReviewIcon />,
+      path: '/admin/feedback'
+    },
     {
       title: 'Chat History',
       icon: <HistoryIcon />,
