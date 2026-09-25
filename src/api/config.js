@@ -28,13 +28,6 @@ export const resolveImageUrl = (rawUrl) => {
   const storageMatch = trimmed.match(/(\/storage\/(?:images|pdf_images)\/[^?\s]+)/i);
   if (storageMatch) {
     const cleanPath = storageMatch[1];
-    if (
-      /^https?:\/\//i.test(trimmed) &&
-      !trimmed.includes("localhost") &&
-      !trimmed.includes("127.0.0.1")
-    ) {
-      return trimmed;
-    }
     const apiBase = getApiBaseUrl();
     return `${apiBase.replace(/\/+$/, "")}${cleanPath}`;
   }
@@ -46,3 +39,4 @@ export const resolveImageUrl = (rawUrl) => {
 
   return trimmed;
 };
+

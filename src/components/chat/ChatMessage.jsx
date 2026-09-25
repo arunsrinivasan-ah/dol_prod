@@ -28,9 +28,17 @@ const normalizeVideo = (v) => ({
 });
 
 const normalizeImage = (img) => {
+  if (!img) return { title: "", url: "", thumbnail: "" };
+  if (typeof img === "string") {
+    const resolved = resolveImageUrl(img);
+    return { title: "Topic image", url: resolved, thumbnail: resolved };
+  }
   const rawUrl =
     img.url ||
     img.Url ||
+    img.image_url ||
+    img.imageUrl ||
+    img.image ||
     (img.base64
       ? img.base64.startsWith("data:")
         ? img.base64
@@ -38,16 +46,40 @@ const normalizeImage = (img) => {
       : "");
   const resolved = resolveImageUrl(rawUrl);
   return {
-    title: img.title || img.Title || "",
+    title: img.title || img.Title || img.about || img.About || img.name || img.Name || "Topic image",
     url: resolved,
     thumbnail: resolved,
   };
 };
 
-const normalizePdf = (pdf) => ({
-  title: pdf.title || pdf.Title || "",
-  link: pdf.link || pdf.Link || pdf.url || "",
-});
+const normalizePdf = (pdf) => {
+  if (!pdf) return { title: "", link: "" };
+  if (typeof pdf === "string") {
+    return { title: "Document", link: pdf };
+  }
+  const link =
+    pdf.link ||
+    pdf.Link ||
+    pdf.url ||
+    pdf.Url ||
+    pdf.pdf_url ||
+    pdf.pdfUrl ||
+    pdf.file ||
+    "";
+  const title =
+    pdf.title ||
+    pdf.Title ||
+    pdf.about ||
+    pdf.About ||
+    pdf.name ||
+    pdf.Name ||
+    "Document";
+  return {
+    title: title || "Document",
+    link,
+  };
+};
+
 
 // ── Markdown prose styles ───
 export const markdownContainerSx = {
@@ -316,11 +348,10 @@ const ChatMessage = ({
 
   const shouldShowMedia =
     !isOutOfScope &&
-    msg.mediaLoaded !== false &&
-    msg.content &&
-    msg.content.length > 0;
+    Boolean(msg.content && msg.content.length > 0);
   const shouldShowQuestions =
-    msg.mediaLoaded !== false && questionSuggestions.length > 0;
+    !isOutOfScope && questionSuggestions.length > 0;
+
 
   const sanitizeDisplayContent = (content) => {
     if (!content || typeof content !== "string") return "";

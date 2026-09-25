@@ -200,24 +200,53 @@ const normalizeVideo = (v) => ({
 });
 
 const normalizeImage = (img) => {
+  if (!img) return { title: "", url: "", thumbnail: "" };
+  if (typeof img === "string") {
+    const resolved = resolveImageUrl(img);
+    return { title: "Topic image", url: resolved, thumbnail: resolved };
+  }
   const rawUrl = img.base64
     ? (img.base64.startsWith("data:")
         ? img.base64
         : `data:image/${img.format || "jpeg"};base64,${img.base64}`)
-    : (img.url || img.Url || "");
+    : (img.url || img.Url || img.image_url || img.imageUrl || img.image || "");
   const resolved = resolveImageUrl(rawUrl);
 
   return {
-    title: img.title || img.Title || "Topic image",
+    title: img.title || img.Title || img.about || img.About || img.name || img.Name || "Topic image",
     url: resolved,
     thumbnail: resolved,
   };
 };
 
-const normalizePdf = (pdf) => ({
-  title: pdf.title || pdf.Title || "",
-  link: pdf.link || pdf.Link || pdf.url || "",
-});
+const normalizePdf = (pdf) => {
+  if (!pdf) return { title: "", link: "" };
+  if (typeof pdf === "string") {
+    return { title: "Document", link: pdf };
+  }
+  const link =
+    pdf.link ||
+    pdf.Link ||
+    pdf.url ||
+    pdf.Url ||
+    pdf.pdf_url ||
+    pdf.pdfUrl ||
+    pdf.file ||
+    "";
+  const title =
+    pdf.title ||
+    pdf.Title ||
+    pdf.about ||
+    pdf.About ||
+    pdf.name ||
+    pdf.Name ||
+    "Document";
+  return {
+    title: title || "Document",
+    link,
+  };
+};
+
 
 const EMPTY_LIVE = {
   active: false,
@@ -1017,21 +1046,25 @@ const ChatWindow = ({
                   role: "assistant",
                   content: liveMessage.content || "",
                   company_content: liveMessage.company_content,
-                  mediaLoaded: false,
+                  mediaLoaded: true,
                   timestamp: new Date().toISOString(),
-                  question_suggestions: [],
+                  question_suggestions: liveMessage.suggestions || [],
                   topics: liveMessage.topics,
                   transcripts: liveMessage.transcripts,
+                  images: liveMessage.media?.images || [],
+                  pdfs: liveMessage.media?.pdfs || [],
+                  videos: liveMessage.media?.videos || [],
                 }}
-                videos_suggestions={liveMessage.media.videos || []}
-                images_suggestions={liveMessage.media.images || []}
-                pdf_suggestions={liveMessage.media.pdfs || []}
+                videos_suggestions={liveMessage.media?.videos || []}
+                images_suggestions={liveMessage.media?.images || []}
+                pdf_suggestions={liveMessage.media?.pdfs || []}
                 onTopicClick={(topicCode) =>
                   handleTopicClick(topicCode, liveMessage.topics)
                 }
                 isStreaming={true}
               />
             )}
+
 
             <div ref={bottomRef} />
           </Box>
