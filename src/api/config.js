@@ -25,16 +25,27 @@ export const resolveImageUrl = (rawUrl) => {
   if (!trimmed) return "";
   if (trimmed.startsWith("data:")) return trimmed;
 
+  const apiBase = getApiBaseUrl().replace(/\/+$/, "");
+
+  // Match /storage/images/... or /storage/pdf_images/...
   const storageMatch = trimmed.match(/(\/storage\/(?:images|pdf_images)\/[^?\s]+)/i);
   if (storageMatch) {
-    const cleanPath = storageMatch[1];
-    const apiBase = getApiBaseUrl();
-    return `${apiBase.replace(/\/+$/, "")}${cleanPath}`;
+    return `${apiBase}${storageMatch[1]}`;
+  }
+
+  // Match /images/... or /pdf_images/... without /storage
+  const imgFolderMatch = trimmed.match(/(\/(?:images|pdf_images)\/[^?\s]+)/i);
+  if (imgFolderMatch) {
+    return `${apiBase}/storage${imgFolderMatch[1]}`;
+  }
+
+  // Raw UUID / filename check
+  if (/^[0-9a-fA-F-]{36}(\.[a-zA-Z0-9]+)?$/.test(trimmed)) {
+    return `${apiBase}/storage/images/${trimmed}`;
   }
 
   if (trimmed.startsWith("/")) {
-    const apiBase = getApiBaseUrl();
-    return `${apiBase.replace(/\/+$/, "")}${trimmed}`;
+    return `${apiBase}${trimmed}`;
   }
 
   return trimmed;

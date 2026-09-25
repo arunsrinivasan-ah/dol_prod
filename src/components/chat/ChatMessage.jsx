@@ -324,15 +324,90 @@ const ChatMessage = ({
     }
   };
 
-  const normalizedVideos = (videos_suggestions || [])
-    .map(normalizeVideo)
-    .filter((v) => v.url);
-  const normalizedImages = (images_suggestions || [])
-    .map(normalizeImage)
-    .filter((img) => img.url);
-  const normalizedPdfs = (pdf_suggestions || [])
-    .map(normalizePdf)
-    .filter((p) => p.link);
+  // 1. Unified, deduplicated videos list (capped to strictly maximum 5)
+  const unifiedVideos = React.useMemo(() => {
+    const rawList = [
+      ...(msg.transcripts || []).map((t) => ({
+        title: t.video_title || t.Title || t.title || (t.content ? `${t.content.substring(0, 45)}...` : "Course Video"),
+        url: t.video_link || t.Url || t.url || t.videourl || "",
+        thumbnail: t.video_thumbnail || t.thumbnail || t.Thumbnail || t.image || t.image_url || t.imageUrl || ((t.video_link || t.Url || t.url) ? (t.video_link || t.Url || t.url).replace(/\.mp4$/i, ".png") : ""),
+      })),
+      ...(videos_suggestions || []).map(normalizeVideo),
+      ...(msg.videos || []).map(normalizeVideo),
+    ];
+
+    const seen = new Set();
+    const result = [];
+
+    for (const v of rawList) {
+      if (!v || !v.url) continue;
+      const cleanUrl = v.url.trim().toLowerCase().replace(/\/+$/, "");
+      const cleanTitle = (v.title || "").trim().toLowerCase();
+      const key = cleanUrl || cleanTitle;
+      if (!key || seen.has(key) || (cleanTitle && seen.has(cleanTitle))) continue;
+      seen.add(key);
+      if (cleanTitle) seen.add(cleanTitle);
+
+      result.push({
+        title: v.title || "Course video",
+        url: v.url,
+        thumbnail: v.thumbnail || (v.url.endsWith(".mp4") ? v.url.replace(/\.mp4$/i, ".png") : ""),
+      });
+
+      if (result.length >= 5) break;
+    }
+
+    return result;
+  }, [msg.transcripts, msg.videos, videos_suggestions]);
+
+  // 2. Unified, deduplicated images list (capped to strictly maximum 5)
+  const normalizedImages = React.useMemo(() => {
+    const rawList = [
+      ...(images_suggestions || []).map(normalizeImage),
+      ...(msg.images || []).map(normalizeImage),
+    ];
+
+    const seen = new Set();
+    const result = [];
+
+    for (const img of rawList) {
+      if (!img || !img.url) continue;
+      const cleanUrl = img.url.trim().toLowerCase();
+      const cleanTitle = (img.title || "").trim().toLowerCase();
+      const key = cleanUrl || cleanTitle;
+      if (!key || seen.has(key) || (cleanTitle && cleanTitle !== "topic image" && seen.has(cleanTitle))) continue;
+      seen.add(key);
+      if (cleanTitle && cleanTitle !== "topic image") seen.add(cleanTitle);
+
+      result.push(img);
+      if (result.length >= 5) break;
+    }
+
+    return result;
+  }, [images_suggestions, msg.images]);
+
+  // 3. Unified, deduplicated pdfs list (capped to strictly maximum 5)
+  const normalizedPdfs = React.useMemo(() => {
+    const rawList = [
+      ...(pdf_suggestions || []).map(normalizePdf),
+      ...(msg.pdfs || []).map(normalizePdf),
+    ];
+
+    const seen = new Set();
+    const result = [];
+
+    for (const p of rawList) {
+      if (!p || !p.link) continue;
+      const cleanLink = p.link.trim().toLowerCase();
+      if (!cleanLink || seen.has(cleanLink)) continue;
+      seen.add(cleanLink);
+
+      result.push(p);
+      if (result.length >= 5) break;
+    }
+
+    return result;
+  }, [pdf_suggestions, msg.pdfs]);
 
   const questionSuggestions = msg.question_suggestions || [];
   
@@ -665,8 +740,8 @@ const ChatMessage = ({
               </Box>
             )}
 
-            {/* All Videos (Transcripts + Normal) */}
-            {!isUser && shouldShowMedia && (normalizedVideos.length > 0 || (msg.transcripts && msg.transcripts.filter(t => t.video_link || t.Url || t.url).length > 0)) && (
+            {/* All Videos (Strictly deduplicated, max 5) */}
+            {!isUser && shouldShowMedia && unifiedVideos.length > 0 && (
               <Box sx={{ mt: 2.5 }}>
                 <Box
                   sx={{
@@ -695,87 +770,39 @@ const ChatMessage = ({
                     py: 1,
                   }}
                 >
-                  {/* Transcript Videos First */}
-                  {msg.transcripts && msg.transcripts.filter(t => t.video_link || t.Url || t.url).map((t, i) => {
-                    const videoTitle = t.video_title || t.Title || t.title || (t.content ? (t.content.substring(0, 40) + "...") : "Transcript Video");
-                    const videoLink = t.video_link || t.Url || t.url;
-
-                    // Derive thumbnail by replacing .mp4 with .png for marinerskills URLs
-                    const transcriptImg = t.video_thumbnail || t.thumbnail || t.Thumbnail || t.image || t.image_url || t.imageUrl || (videoLink ? videoLink.replace(/\.mp4$/i, ".png") : "");
-
-                    return (
-                      <Box
-                        key={`transcript-${i}`}
-                        sx={mediaCardSx}
-                        onClick={() => openPreview("video", videoLink)}
-                      >
-                        {transcriptImg && (
-                          <Box
-                            component="img"
-                            src={transcriptImg}
-                            alt={videoTitle}
-                            sx={mediaThumbnailSx}
-                            onError={(e) => {
-                              // If image fails to load, gracefully fall back
-                              e.target.style.display = 'none';
-                              const fallback = e.target.nextElementSibling;
-                              if (fallback && fallback.classList.contains('fallback-icon-container')) {
-                                fallback.style.display = 'flex';
-                              }
-                            }}
-                          />
-                        )}
-                        <Box
-                          className="fallback-icon-container"
-                          sx={{
-                            ...mediaThumbnailSx,
-                            display: transcriptImg ? "none" : "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            backgroundColor: "background.paper",
-                          }}
-                        >
-                          <VideoIcon size={40} color="primary.main" />
-                        </Box>
-                        <Box
-                          sx={{
-                            position: "absolute",
-                            top: "40%",
-                            left: "50%",
-                            transform: "translate(-50%, -50%)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: 36,
-                            height: 36,
-                            borderRadius: "50%",
-                            backgroundColor: "rgba(0,0,0,0.45)",
-                          }}
-                        >
-                          <PlayArrowRoundedIcon
-                            sx={{ color: "#fff", fontSize: 22 }}
-                          />
-                        </Box>
-                        <Typography variant="caption" sx={mediaCaptionSx}>
-                          {videoTitle}
-                        </Typography>
-                      </Box>
-                    );
-                  })}
-
-                  {/* Normal Videos Second */}
-                  {normalizedVideos.map((video, i) => (
+                  {unifiedVideos.map((video, i) => (
                     <Box
-                      key={`normal-${i}`}
+                      key={`video-${i}`}
                       sx={mediaCardSx}
                       onClick={() => openPreview("video", video.url)}
                     >
+                      {video.thumbnail && (
+                        <Box
+                          component="img"
+                          src={video.thumbnail}
+                          alt={video.title}
+                          sx={mediaThumbnailSx}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            const fallback = e.target.nextElementSibling;
+                            if (fallback && fallback.classList.contains('fallback-icon-container')) {
+                              fallback.style.display = 'flex';
+                            }
+                          }}
+                        />
+                      )}
                       <Box
-                        component="img"
-                        src={video.thumbnail}
-                        alt={video.title}
-                        sx={mediaThumbnailSx}
-                      />
+                        className="fallback-icon-container"
+                        sx={{
+                          ...mediaThumbnailSx,
+                          display: video.thumbnail ? "none" : "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: "background.paper",
+                        }}
+                      >
+                        <VideoIcon size={40} color="primary.main" />
+                      </Box>
                       <Box
                         sx={{
                           position: "absolute",
@@ -802,7 +829,7 @@ const ChatMessage = ({
                   ))}
                 </Box>
 
-                {((normalizedVideos.length + (msg.transcripts ? msg.transcripts.filter(t => t.video_link || t.Url || t.url).length : 0)) > 4) && (
+                {unifiedVideos.length > 4 && (
                   <Typography
                     onClick={() => setShowAllVideos((p) => !p)}
                     variant="body1"
