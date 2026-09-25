@@ -45,8 +45,22 @@ const normalizeImage = (img) => {
         : `data:image/${img.format || "jpeg"};base64,${img.base64}`
       : "");
   const resolved = resolveImageUrl(rawUrl);
+
+  let title = img.title || img.Title || img.name || img.Name || "";
+  if (!title && (img.about || img.About)) {
+    const aboutStr = String(img.about || img.About).replace(/<[^>]+>/g, "").trim();
+    if (aboutStr) {
+      if (aboutStr.includes("-")) {
+        const parts = aboutStr.split("-").map((p) => p.trim()).filter(Boolean);
+        title = parts[parts.length - 1] || aboutStr;
+      } else {
+        title = aboutStr.length > 50 ? `${aboutStr.substring(0, 47)}...` : aboutStr;
+      }
+    }
+  }
+
   return {
-    title: img.title || img.Title || img.about || img.About || img.name || img.Name || "Topic image",
+    title: title || "Topic image",
     url: resolved,
     thumbnail: resolved,
   };
@@ -702,6 +716,7 @@ const ChatMessage = ({
                   {normalizedImages.map((img, i) => (
                     <Box
                       key={i}
+                      className="chat-image-card"
                       sx={mediaCardSx}
                       onClick={() => openPreview("image", img.url)}
                     >
@@ -711,25 +726,15 @@ const ChatMessage = ({
                         alt={img.title}
                         sx={mediaThumbnailSx}
                         onError={(e) => {
-                          e.target.style.display = "none";
-                          const fallback = e.target.nextElementSibling;
-                          if (fallback && fallback.classList.contains("fallback-image-icon-container")) {
-                            fallback.style.display = "flex";
+                          // Hide broken image card entirely so no broken placeholder is shown
+                          const card = e.target.closest('.chat-image-card');
+                          if (card) {
+                            card.style.display = 'none';
+                          } else {
+                            e.target.style.display = 'none';
                           }
                         }}
                       />
-                      <Box
-                        className="fallback-image-icon-container"
-                        sx={{
-                          ...mediaThumbnailSx,
-                          display: "none",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          backgroundColor: "background.paper",
-                        }}
-                      >
-                        <ImageIcon size={40} color={mode === "dark" ? "#90caf9" : "#0288d1"} />
-                      </Box>
 
                       <Typography variant="caption" sx={mediaCaptionSx}>
                         {img.title}
