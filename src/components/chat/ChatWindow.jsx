@@ -19,6 +19,7 @@ import {
   fetchTopicDetails,
 } from "../../api/fetchApi";
 import ChatMessage, { markdownContainerSx } from "./ChatMessage";
+import { resolveImageUrl } from "../../api/config";
 import { useThemeMode } from "../../context/ThemeModeContext";
 import { Message } from "../../assets/svgIcons/message";
 import { Saveoutlined } from "../../assets/svgIcons/SaveIconOutlined";
@@ -199,14 +200,17 @@ const normalizeVideo = (v) => ({
 });
 
 const normalizeImage = (img) => {
-  const imageSrc = img.base64
-    ? `data:image/${img.format || "jpeg"};base64,${img.base64}`
-    : img.url || img.Url || "";
+  const rawUrl = img.base64
+    ? (img.base64.startsWith("data:")
+        ? img.base64
+        : `data:image/${img.format || "jpeg"};base64,${img.base64}`)
+    : (img.url || img.Url || "");
+  const resolved = resolveImageUrl(rawUrl);
 
   return {
-    title: img.title || img.Title,
-    url: imageSrc,
-    thumbnail: imageSrc,
+    title: img.title || img.Title || "Topic image",
+    url: resolved,
+    thumbnail: resolved,
   };
 };
 
@@ -491,7 +495,7 @@ const ChatWindow = ({
         } else if (statusStep >= 3) {
           setStatusMessage((prev) =>
             prev === "Dolphin is thinking..." ||
-            prev === "Dolphin is fetching relevant information..."
+              prev === "Dolphin is fetching relevant information..."
               ? "Dolphin is generating response..."
               : prev
           );

@@ -6,8 +6,7 @@ import { fetchHealth } from "../../api/fetchApi";
 import axios from "axios";
 import Header from "../../components/header/Header";
 import MainLayout from "../../layouts/MainLayout";
-
-const APP_URL = process.env.REACT_APP_BASE_URL || "http://localhost:8000";
+import { APP_URL } from "../../api/config";
 
 const Chatpage = ({ userId, setUserId, onLogout }) => {
   const [sessionData, setSessionData] = useState([]);

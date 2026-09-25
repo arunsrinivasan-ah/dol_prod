@@ -1,6 +1,5 @@
 import axios from "axios";
-
-const APP_URL = process.env.REACT_APP_BASE_URL || "http://localhost:8000";
+import { APP_URL } from "./config";
 export const loginApi = async (email, password) => {
   try {
     const response = await axios.post(

@@ -1,4 +1,4 @@
-const APP_URL = process.env.REACT_APP_BASE_URL || "http://localhost:8000";
+import { APP_URL } from "./config";
 
 const normalizeUrl = (url) => {
   if (!url) return APP_URL;

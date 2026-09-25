@@ -9,8 +9,7 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
-
-const APP_URL = process.env.REACT_APP_BASE_URL || "http://localhost:8000";
+import { APP_URL } from "../../api/config";
 
 const QuizDisplay = ({ quizContent }) => {
   const [answers, setAnswers] = useState([]);

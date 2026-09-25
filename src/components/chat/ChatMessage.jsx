@@ -18,23 +18,7 @@ import { DocumentIcon } from "../../assets/svgIcons/DocumentIcon";
 import MediaPreviewModal from "./MediaPreviewModal";
 import FeedbackRatingButtons from "./FeedbackRatingButtons";
 
-const APP_URL = process.env.REACT_APP_BASE_URL || "http://localhost:8000";
-
-const resolveImageUrl = (rawUrl) => {
-  if (!rawUrl || typeof rawUrl !== "string") return "";
-  const trimmed = rawUrl.trim();
-  if (!trimmed) return "";
-  if (trimmed.startsWith("data:")) return trimmed;
-
-  // Match /storage/images/... or /storage/pdf_images/... (regardless of domain or relative path)
-  const storageMatch = trimmed.match(/(\/storage\/(?:images|pdf_images)\/[^?\s]+)/i);
-  if (storageMatch) {
-    const cleanPath = storageMatch[1];
-    return `${APP_URL.replace(/\/+$/, "")}${cleanPath}`;
-  }
-
-  return trimmed;
-};
+import { resolveImageUrl } from "../../api/config";
 
 // ─── Normalisers ───
 const normalizeVideo = (v) => ({
@@ -638,7 +622,7 @@ const ChatMessage = ({
                           backgroundColor: "background.paper",
                         }}
                       >
-                        <ImageIcon size={40} color="primary.main" />
+                        <ImageIcon size={40} color={mode === "dark" ? "#90caf9" : "#0288d1"} />
                       </Box>
 
                       <Typography variant="caption" sx={mediaCaptionSx}>

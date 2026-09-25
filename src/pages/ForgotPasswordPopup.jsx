@@ -13,6 +13,7 @@ import axios from "axios";
 import dolphinBlack from "../assets/images/dolphin_b.png";
 import DolphinWhite from "../assets/images/dolphin_w.png";
 import { useThemeMode } from "../context/ThemeModeContext";
+import { APP_URL } from "../api/config";
 
 
 export default function ForgotPasswordPopup({ open, handleClose }) {
@@ -22,8 +23,6 @@ export default function ForgotPasswordPopup({ open, handleClose }) {
   const [loading, setLoading] = useState(false);
 
   const { mode } = useThemeMode();
-
-  const APP_URL = process.env.REACT_APP_BASE_URL || "http://localhost:8000";
 
   const handleSubmit = async () => {
     setLoading(true);
