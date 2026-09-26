@@ -6,17 +6,21 @@ import RateReviewIcon from '@mui/icons-material/RateReview';
 import { useThemeMode } from '../../context/ThemeModeContext';
 import { getSidebarWidth } from '../../theme/layoutScale';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { isFeedbackAuthorized, getCurrentUserEmail } from '../../utils/feedbackAuth';
 
 const AdminSidebar = ({ setSidebarOpen }) => {
   const { fontLevel } = useThemeMode();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const menuItems = [
+  const isFeedbackAllowed = isFeedbackAuthorized(getCurrentUserEmail());
+
+  const allMenuItems = [
     {
       title: 'Feedback & Learning',
       icon: <RateReviewIcon />,
-      path: '/admin/feedback'
+      path: '/admin/feedback',
+      feedbackOnly: true
     },
     {
       title: 'Chat History',
@@ -29,6 +33,8 @@ const AdminSidebar = ({ setSidebarOpen }) => {
       path: '/admin/members'
     }
   ];
+
+  const menuItems = allMenuItems.filter(item => !item.feedbackOnly || isFeedbackAllowed);
 
   return (
     <Box

@@ -16,9 +16,18 @@ import {
   fetchApprovedFeedback,
   fetchFeedbackDetail,
 } from "../../api/feedbackApi";
+import { isFeedbackAuthorized, getCurrentUserEmail } from "../../utils/feedbackAuth";
 
 const FeedbackPage = ({ onNavigateToChat, userProfile, onLogout }) => {
   const navigate = useNavigate();
+  const isAuthorized = isFeedbackAuthorized(userProfile?.email || getCurrentUserEmail());
+
+  useEffect(() => {
+    if (!isAuthorized) {
+      navigate("/", { replace: true });
+    }
+  }, [isAuthorized, navigate]);
+
   const handleNavChat = onNavigateToChat || (() => navigate("/"));
 
   // Tab state: 0 -> Dashboard, 1 -> Pending, 2 -> Approved
@@ -235,6 +244,10 @@ const FeedbackPage = ({ onNavigateToChat, userProfile, onLogout }) => {
       handleBackToList();
     }
   };
+
+  if (!isAuthorized) {
+    return null;
+  }
 
   return (
     <div className="fb-page-container" style={{ width: "100vw", height: "100vh", minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: "#f8fafc", overflow: "hidden" }}>

@@ -30,39 +30,44 @@ const normalizeVideo = (v) => ({
 const normalizeImage = (img) => {
   if (!img) return { title: "", url: "", thumbnail: "" };
   if (typeof img === "string") {
-    const resolved = resolveImageUrl(img);
-    return { title: "Topic image", url: resolved, thumbnail: resolved };
+    const src = resolveImageUrl(img);
+    return { title: "Topic image", url: src, thumbnail: src };
   }
-  const rawUrl =
-    img.url ||
-    img.Url ||
-    img.image_url ||
-    img.imageUrl ||
-    img.image ||
-    (img.base64
-      ? img.base64.startsWith("data:")
-        ? img.base64
-        : `data:image/${img.format || "jpeg"};base64,${img.base64}`
-      : "");
-  const resolved = resolveImageUrl(rawUrl);
 
-  let title = img.title || img.Title || img.name || img.Name || "";
-  if (!title && (img.about || img.About)) {
-    const aboutStr = String(img.about || img.About).replace(/<[^>]+>/g, "").trim();
-    if (aboutStr) {
-      if (aboutStr.includes("-")) {
-        const parts = aboutStr.split("-").map((p) => p.trim()).filter(Boolean);
-        title = parts[parts.length - 1] || aboutStr;
-      } else {
-        title = aboutStr.length > 50 ? `${aboutStr.substring(0, 47)}...` : aboutStr;
-      }
-    }
-  }
+  const rawBase64 = img.base64 || img.Base64;
+  const hasValidBase64 =
+    rawBase64 &&
+    typeof rawBase64 === "string" &&
+    rawBase64.trim() !== "" &&
+    rawBase64.trim().toLowerCase() !== "none" &&
+    rawBase64.trim().toLowerCase() !== "null" &&
+    rawBase64.trim().length > 50;
+
+  const imageSrc = hasValidBase64
+    ? (rawBase64.startsWith("data:")
+        ? rawBase64
+        : `data:image/${img.format || "jpeg"};base64,${rawBase64}`)
+    : resolveImageUrl(
+        img.url ||
+        img.Url ||
+        img.image_url ||
+        img.imageUrl ||
+        img.image ||
+        img.src ||
+        img.path ||
+        img.id ||
+        img.Id ||
+        ""
+      );
+
+  const thumbSrc = img.thumbnail || img.Thumbnail
+    ? resolveImageUrl(img.thumbnail || img.Thumbnail)
+    : (img.Url || img.url ? resolveImageUrl(img.Url || img.url) : imageSrc);
 
   return {
-    title: title || "Topic image",
-    url: resolved,
-    thumbnail: resolved,
+    title: img.title || img.Title || img.name || "Topic image",
+    url: imageSrc,
+    thumbnail: thumbSrc,
   };
 };
 
@@ -71,26 +76,9 @@ const normalizePdf = (pdf) => {
   if (typeof pdf === "string") {
     return { title: "Document", link: pdf };
   }
-  const link =
-    pdf.link ||
-    pdf.Link ||
-    pdf.url ||
-    pdf.Url ||
-    pdf.pdf_url ||
-    pdf.pdfUrl ||
-    pdf.file ||
-    "";
-  const title =
-    pdf.title ||
-    pdf.Title ||
-    pdf.about ||
-    pdf.About ||
-    pdf.name ||
-    pdf.Name ||
-    "Document";
   return {
-    title: title || "Document",
-    link,
+    title: pdf.title || pdf.Title || "",
+    link: pdf.link || pdf.Link || pdf.url || pdf.Url || "",
   };
 };
 
@@ -374,54 +362,13 @@ const ChatMessage = ({
     return result;
   }, [msg.transcripts, msg.videos, videos_suggestions]);
 
-  // 2. Unified, deduplicated images list (capped to strictly maximum 5)
-  const normalizedImages = React.useMemo(() => {
-    const rawList = [
-      ...(images_suggestions || []).map(normalizeImage),
-      ...(msg.images || []).map(normalizeImage),
-    ];
+  const normalizedImages = (images_suggestions || msg?.images || msg?.metadata?.images || [])
+    .map(normalizeImage)
+    .filter((img) => img.url);
 
-    const seen = new Set();
-    const result = [];
-
-    for (const img of rawList) {
-      if (!img || !img.url) continue;
-      const cleanUrl = img.url.trim().toLowerCase();
-      const cleanTitle = (img.title || "").trim().toLowerCase();
-      const key = cleanUrl || cleanTitle;
-      if (!key || seen.has(key) || (cleanTitle && cleanTitle !== "topic image" && seen.has(cleanTitle))) continue;
-      seen.add(key);
-      if (cleanTitle && cleanTitle !== "topic image") seen.add(cleanTitle);
-
-      result.push(img);
-      if (result.length >= 5) break;
-    }
-
-    return result;
-  }, [images_suggestions, msg.images]);
-
-  // 3. Unified, deduplicated pdfs list (capped to strictly maximum 5)
-  const normalizedPdfs = React.useMemo(() => {
-    const rawList = [
-      ...(pdf_suggestions || []).map(normalizePdf),
-      ...(msg.pdfs || []).map(normalizePdf),
-    ];
-
-    const seen = new Set();
-    const result = [];
-
-    for (const p of rawList) {
-      if (!p || !p.link) continue;
-      const cleanLink = p.link.trim().toLowerCase();
-      if (!cleanLink || seen.has(cleanLink)) continue;
-      seen.add(cleanLink);
-
-      result.push(p);
-      if (result.length >= 5) break;
-    }
-
-    return result;
-  }, [pdf_suggestions, msg.pdfs]);
+  const normalizedPdfs = (pdf_suggestions || msg?.pdfs || msg?.metadata?.pdfs || [])
+    .map(normalizePdf)
+    .filter((pdf) => pdf.link);
 
   const questionSuggestions = msg.question_suggestions || [];
   
@@ -716,7 +663,6 @@ const ChatMessage = ({
                   {normalizedImages.map((img, i) => (
                     <Box
                       key={i}
-                      className="chat-image-card"
                       sx={mediaCardSx}
                       onClick={() => openPreview("image", img.url)}
                     >
@@ -726,15 +672,32 @@ const ChatMessage = ({
                         alt={img.title}
                         sx={mediaThumbnailSx}
                         onError={(e) => {
-                          // Hide broken image card entirely so no broken placeholder is shown
-                          const card = e.target.closest('.chat-image-card');
-                          if (card) {
-                            card.style.display = 'none';
+                          const currentSrc = e.target.src || "";
+                          if (currentSrc.endsWith(".png")) {
+                            e.target.src = currentSrc.replace(/\.png$/, ".jpg");
+                          } else if (currentSrc.endsWith(".jpg")) {
+                            e.target.src = currentSrc.replace(/\.jpg$/, ".jpeg");
                           } else {
                             e.target.style.display = 'none';
+                            const fallback = e.target.nextElementSibling;
+                            if (fallback && fallback.classList.contains('fallback-img-container')) {
+                              fallback.style.display = 'flex';
+                            }
                           }
                         }}
                       />
+                      <Box
+                        className="fallback-img-container"
+                        sx={{
+                          ...mediaThumbnailSx,
+                          display: "none",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: "background.paper",
+                        }}
+                      >
+                        <ImageIcon size={40} color="primary.main" />
+                      </Box>
 
                       <Typography variant="caption" sx={mediaCaptionSx}>
                         {img.title}

@@ -202,20 +202,23 @@ const normalizeVideo = (v) => ({
 const normalizeImage = (img) => {
   if (!img) return { title: "", url: "", thumbnail: "" };
   if (typeof img === "string") {
-    const resolved = resolveImageUrl(img);
-    return { title: "Topic image", url: resolved, thumbnail: resolved };
+    const src = resolveImageUrl(img);
+    return { title: "Topic image", url: src, thumbnail: src };
   }
-  const rawUrl = img.base64
+  const imageSrc = img.base64
     ? (img.base64.startsWith("data:")
         ? img.base64
         : `data:image/${img.format || "jpeg"};base64,${img.base64}`)
-    : (img.url || img.Url || img.image_url || img.imageUrl || img.image || "");
-  const resolved = resolveImageUrl(rawUrl);
+    : resolveImageUrl(img.url || img.Url || "");
+
+  const thumbSrc = img.thumbnail
+    ? resolveImageUrl(img.thumbnail)
+    : (img.Url || img.url ? resolveImageUrl(img.Url || img.url) : imageSrc);
 
   return {
-    title: img.title || img.Title || img.about || img.About || img.name || img.Name || "Topic image",
-    url: resolved,
-    thumbnail: resolved,
+    title: img.title || img.Title || "",
+    url: imageSrc,
+    thumbnail: thumbSrc,
   };
 };
 
@@ -224,26 +227,9 @@ const normalizePdf = (pdf) => {
   if (typeof pdf === "string") {
     return { title: "Document", link: pdf };
   }
-  const link =
-    pdf.link ||
-    pdf.Link ||
-    pdf.url ||
-    pdf.Url ||
-    pdf.pdf_url ||
-    pdf.pdfUrl ||
-    pdf.file ||
-    "";
-  const title =
-    pdf.title ||
-    pdf.Title ||
-    pdf.about ||
-    pdf.About ||
-    pdf.name ||
-    pdf.Name ||
-    "Document";
   return {
-    title: title || "Document",
-    link,
+    title: pdf.title || pdf.Title || "",
+    link: pdf.link || pdf.Link || pdf.url || pdf.Url || "",
   };
 };
 

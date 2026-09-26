@@ -8,12 +8,14 @@ import AdminPage from "./pages/admin/AdminPage.jsx";
 import FeedbackPage from "./pages/feedback/FeedbackPage.jsx";
 import './App.css'
 import { logout } from "./api/apiAuth.js";
+import { isFeedbackAuthorized, getCurrentUserEmail } from "./utils/feedbackAuth.js";
 
 function App() {
   const [userId, setUserId] = useState(null);
 
   const [authLoading, setAuthLoading] = useState(true);
   const [userRole, setUserRole] = useState(null);
+  const [userEmail, setUserEmail] = useState("");
 
   useEffect(() => {
     const storedUserId = localStorage.getItem("userId");
@@ -27,6 +29,8 @@ function App() {
       try {
         const parsedData = JSON.parse(storedUserData);
         setUserRole(parsedData.user_role);
+        const email = (parsedData.email || parsedData.user_profile?.email || parsedData.user_email || parsedData.user_name || "").trim().toLowerCase();
+        setUserEmail(email);
       } catch (e) {
         console.error("Error parsing user data");
       }
@@ -42,6 +46,8 @@ function App() {
       try {
         const parsedData = JSON.parse(storedUserData);
         setUserRole(parsedData.user_role);
+        const email = (parsedData.email || parsedData.user_profile?.email || parsedData.user_email || parsedData.user_name || "").trim().toLowerCase();
+        setUserEmail(email);
       } catch (e) {
         console.error("Error parsing user data");
       }
@@ -56,12 +62,15 @@ function App() {
     localStorage.removeItem("active_session_id");
     setUserId(null);
     setUserRole(null);
+    setUserEmail("");
     window.history.replaceState(null, "", process.env.PUBLIC_URL || "/");
   };
 
   if (authLoading) {
     return null;
   }
+
+  const isFeedbackAllowed = isFeedbackAuthorized(userEmail || getCurrentUserEmail());
 
   return userId ? (
     <Router basename={process.env.PUBLIC_URL || "/"}>
@@ -72,12 +81,18 @@ function App() {
             <AdminPage onLogout={handleLogout} />
             : <Navigate to="/" replace />
         }>
-          <Route index element={<Navigate to="feedback" replace />} />
-          <Route path="feedback" element={<FeedbackPage />} />
+          <Route index element={
+            isFeedbackAllowed ? <Navigate to="feedback" replace /> : <Navigate to="chat-history" replace />
+          } />
+          <Route path="feedback" element={
+            isFeedbackAllowed ? <FeedbackPage onLogout={handleLogout} /> : <Navigate to="/admin/chat-history" replace />
+          } />
           <Route path="chat-history" element={<ChatHistoryAdmin />} />
           <Route path="members" element={<Members />} />
         </Route>
-        <Route path="/feedback" element={<FeedbackPage />} />
+        <Route path="/feedback" element={
+          isFeedbackAllowed ? <FeedbackPage onLogout={handleLogout} /> : <Navigate to="/" replace />
+        } />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
