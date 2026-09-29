@@ -1,4 +1,4 @@
-import { apiGet, sessionFetch } from './client';
+import { apiGet, apiPut, sessionFetch } from './client';
 import { APP_URL } from './config';
 import { loginApi, logout } from './apiAuth';
 import { createSession, getSavedSessions, saveSession, deleteSession, submitMessageFeedback, fetchTopicDetails } from './fetchApi';
@@ -61,4 +61,19 @@ test('reads the current token for every request and prevents authenticated redir
   await apiGet('/sessions');
   expect(fetch.mock.calls[1][1].headers.get('Authorization')).toBe('Bearer new-token');
   expect(fetch.mock.calls[1][1].redirect).toBe('error');
+});
+
+test('members list and role update receive bearer tokens', async () => {
+  await apiGet('/users', { query: { admin_user_id: 'owner', limit: 100, offset: 0 } });
+  await apiPut('/users/member/role?admin_user_id=owner', { role_id: 2 });
+  for (const [, config] of fetch.mock.calls) {
+    expect(config.headers.get('Authorization')).toBe('Bearer test-token');
+    expect(config.redirect).toBe('error');
+  }
+  expect(fetch.mock.calls[1][1].body).toBe(JSON.stringify({ role_id: 2 }));
+});
+test('members authentication is restricted to the API origin and resource path', async () => {
+  await sessionFetch('https://example.org/users', { headers: { Authorization: 'Bearer secret' } });
+  await apiGet('/users-public');
+  for (const [, config] of fetch.mock.calls) expect(config.headers.has('Authorization')).toBe(false);
 });
