@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import ChatSideBar from "../../components/chat/ChatSideBar";
 import ChatWindow from "../../components/chat/ChatWindow";
 import { fetchHealth } from "../../api/fetchApi";
-import axios from "axios";
+import { apiGet } from "../../api/client";
 import Header from "../../components/header/Header";
 import MainLayout from "../../layouts/MainLayout";
 import { APP_URL } from "../../api/config";
@@ -32,15 +32,13 @@ const Chatpage = ({ userId, setUserId, onLogout }) => {
 
       const userId = localStorage.getItem("user_id");
 
-      const response = await axios.get(`${APP_URL}/sessions`, {
-        params: {
+      const data = await apiGet(`${APP_URL}/sessions`, {
+        query: {
           user_id: userId,
           ...(searchTerm && { search: searchTerm }),
         },
-        withCredentials: true,
       });
 
-      const data = response.data;
       if (Array.isArray(data)) {
         setSessionData((prevData) => {
           const prevMap = new Map(prevData.map(s => [s.session_id, s]));
@@ -70,12 +68,10 @@ const Chatpage = ({ userId, setUserId, onLogout }) => {
 
       const userId = localStorage.getItem("user_id");
 
-      const response = await axios.get(`${APP_URL}/sessions/${sessionId}`, {
-        params: { user_id: userId },
-        withCredentials: true,
+      const data = await apiGet(`${APP_URL}/sessions/${sessionId}`, {
+        query: { user_id: userId },
       });
 
-      const data = response.data;
 
       setCurrentSessionId(data.session_id);
       setCurrentSessionData(data);
