@@ -1,4 +1,5 @@
 import axios from "axios";
+import { apiPost, sessionFetch } from "./client";
 import { APP_URL } from "./config";
 
 export const fetchHealth = async () => {
@@ -31,7 +32,7 @@ const checkLicCourses = async (param) => {
 
 export const submitMessageFeedback = async (feedbackData) => {
   try {
-    const response = await fetch(`${APP_URL}/sessions/message-feedback`, {
+    const response = await sessionFetch(`${APP_URL}/sessions/message-feedback`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -324,7 +325,7 @@ export const sendMessage = async (
 
 export const fetchTopicDetails = async (topicCode) => {
   try {
-    const response = await fetch(`${APP_URL}/sessions/topic/${topicCode}`, {
+    const response = await sessionFetch(`${APP_URL}/sessions/topic/${topicCode}`, {
       method: "GET",
       credentials: "include",
     });
@@ -345,15 +346,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export const createSession = async () => {
   try {
     const userId = localStorage.getItem("user_id");
-    const response = await axios.post(
-      `${APP_URL}/sessions`,
-      { user_id: userId },
-      {
-        headers: { "Content-Type": "application/json" },
-        withCredentials: true,
-      },
-    );
-    return response.data;
+    return await apiPost(`${APP_URL}/sessions`, { user_id: userId });
   } catch (error) {
     throw new Error("Unable to create a new session");
   }
@@ -366,7 +359,7 @@ export const ensureSession = async (currentSessionId) => {
 };
 
 export const saveSession = async (sessionId) => {
-  const response = await fetch(`${APP_URL}/sessions/save/${sessionId}`, {
+  const response = await sessionFetch(`${APP_URL}/sessions/save/${sessionId}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -393,7 +386,7 @@ export const getSavedSessions = async () => {
     throw new Error("User ID not found");
   }
 
-  const response = await fetch(`${APP_URL}/sessions/saved/${userId}`, {
+  const response = await sessionFetch(`${APP_URL}/sessions/saved/${userId}`, {
     method: "GET",
     credentials: "include",
   });
@@ -408,7 +401,7 @@ export const getSavedSessions = async () => {
 };
 
 export const deleteSession = async (sessionId) => {
-  const response = await fetch(`${APP_URL}/sessions/${sessionId}`, {
+  const response = await sessionFetch(`${APP_URL}/sessions/${sessionId}`, {
     method: "DELETE",
     credentials: "include",
   });

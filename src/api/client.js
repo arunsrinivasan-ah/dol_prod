@@ -8,6 +8,34 @@ const normalizeUrl = (url) => {
   return `${base}/${path}`;
 };
 
+// Use the token already persisted by loginApi. Do not change global fetch/axios defaults.
+export const sessionFetch = (url, options = {}) => {
+  const requestUrl = new URL(url, APP_URL);
+  const apiUrl = new URL(APP_URL);
+  const sessionPath = `${apiUrl.pathname.replace(/\/+$/, "")}/sessions`;
+  const isSessionRequest = requestUrl.origin === apiUrl.origin &&
+    (requestUrl.pathname === sessionPath || requestUrl.pathname.startsWith(`${sessionPath}/`));
+  const headers = new Headers(options.headers);
+  if (requestUrl.origin !== apiUrl.origin) headers.delete("Authorization");
+  let token;
+  if (isSessionRequest) {
+    try {
+      token = JSON.parse(localStorage.getItem("userData") || "null")?.access_token;
+    } catch {
+      // Invalid or legacy stored login data has no usable token.
+    }
+    if (typeof token === "string" && token.trim()) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+  }
+  return fetch(url, {
+    ...options,
+    headers,
+    // Authenticated session calls must not redirect to another destination.
+    ...(headers.has("Authorization") && isSessionRequest ? { redirect: "error" } : {}),
+  });
+};
+
 const readBody = async (response) => {
   try {
     if (typeof response.text === "function") {
@@ -87,7 +115,7 @@ export const apiRequest = async ({
     config.body = isFormData ? body : JSON.stringify(body);
   }
 
-  const response = await fetch(requestUrl, config);
+  const response = await sessionFetch(requestUrl, config);
 
   if (!response.ok) {
     const message = await readErrorMessage(response, `${method} request failed`);
