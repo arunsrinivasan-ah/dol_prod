@@ -12,13 +12,16 @@ const normalizeUrl = (url) => {
 export const sessionFetch = (url, options = {}) => {
   const requestUrl = new URL(url, APP_URL);
   const apiUrl = new URL(APP_URL);
-  const sessionPath = `${apiUrl.pathname.replace(/\/+$/, "")}/sessions`;
-  const isSessionRequest = requestUrl.origin === apiUrl.origin &&
-    (requestUrl.pathname === sessionPath || requestUrl.pathname.startsWith(`${sessionPath}/`));
+  const basePath = apiUrl.pathname.replace(/\/+$/, "");
+  const isAuthenticatedRequest = requestUrl.origin === apiUrl.origin &&
+    ["sessions", "users"].some(resource => {
+      const path = `${basePath}/${resource}`;
+      return requestUrl.pathname === path || requestUrl.pathname.startsWith(`${path}/`);
+    });
   const headers = new Headers(options.headers);
   if (requestUrl.origin !== apiUrl.origin) headers.delete("Authorization");
   let token;
-  if (isSessionRequest) {
+  if (isAuthenticatedRequest) {
     try {
       token = JSON.parse(localStorage.getItem("userData") || "null")?.access_token;
     } catch {
@@ -31,8 +34,8 @@ export const sessionFetch = (url, options = {}) => {
   return fetch(url, {
     ...options,
     headers,
-    // Authenticated session calls must not redirect to another destination.
-    ...(headers.has("Authorization") && isSessionRequest ? { redirect: "error" } : {}),
+    // Authenticated API calls must not redirect to another destination.
+    ...(headers.has("Authorization") && isAuthenticatedRequest ? { redirect: "error" } : {}),
   });
 };
 

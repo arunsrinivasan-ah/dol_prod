@@ -89,61 +89,69 @@ const Members = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
 
-  // Get current user details from local storage
-  const userData = JSON.parse(localStorage.getItem("userData") || "{}");
-  const profile = userData.user_profile || userData;
-  const currentUserId = profile?.user_id;
-  const currentUserRole = profile?.user_role;
+  // Authorization comes from the login response, not company profile fields.
+  let userData = {};
+  try {
+    userData = JSON.parse(localStorage.getItem("userData") || "{}") || {};
+  } catch {
+    // Missing or malformed authentication must not enable member controls.
+  }
+  const currentUserId = userData.user_id;
+  const currentUserRole = userData.user_role;
+  const canListUsers = currentUserRole === "ADMIN" || currentUserRole === "SUPER_ADMIN";
+  const canChangeRoles = currentUserRole === "SUPER_ADMIN";
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      let isMounted = true;
-
-      const fetchUsers = async () => {
-        setLoading(true);
-        try {
-          // The backend defaults to returning only 10 users if no limit is specified.
-          // Setting limit=1000 forces the backend to send all users at once.
-          let url = `/users?admin_user_id=${currentUserId}&limit=100&offset=0`;
-          if (searchQuery) {
-            url += `&search=${encodeURIComponent(searchQuery)}`;
-          }
-
-          const data = await apiGet(url);
-          if (!isMounted) return;
-
-          if (data && data.users) {
-            setUsers(data.users);
-          } else if (Array.isArray(data)) {
-            setUsers(data);
-          } else {
-            setUsers([]);
-          }
-        } catch (err) {
-          if (!isMounted) return;
-          setUsers([]);
-          setSnackbarMessage(err.message || "Failed to load members.");
-          setSnackbarSeverity("error");
-        } finally {
-          if (isMounted) {
-            setLoading(false);
-          }
-        }
-      };
-
-      if (currentUserId) {
-        fetchUsers();
+    let isMounted = true;
+    const controller = new AbortController();
+    setUsers([]);
+    setLoading(true);
+    const timer = setTimeout(async () => {
+      if (!canListUsers || !currentUserId) {
+        setLoading(false);
+        setSnackbarMessage("Access denied");
+        setSnackbarSeverity("error");
+        return;
       }
-
-      return () => {
-        isMounted = false;
-      };
+      try {
+        const allUsers = [];
+        const limit = 100;
+        let offset = 0;
+        while (isMounted) {
+          const data = await apiGet("/users", {
+            query: {
+              admin_user_id: currentUserId,
+              limit,
+              offset,
+              ...(searchQuery && { search: searchQuery }),
+            },
+            signal: controller.signal,
+          });
+          if (!isMounted) return;
+          const page = Array.isArray(data) ? data : data?.users || [];
+          allUsers.push(...page);
+          offset += page.length;
+          if (!page.length || (data?.total != null ? offset >= data.total : page.length < limit)) break;
+        }
+        if (isMounted) setUsers(allUsers);
+      } catch (err) {
+        if (!isMounted) return;
+        setUsers([]);
+        setSnackbarMessage(err.message || "Failed to load members.");
+        setSnackbarSeverity("error");
+      } finally {
+        if (isMounted) setLoading(false);
+      }
     }, 400);
-
-    return () => clearTimeout(timer);
-  }, [currentUserId, searchQuery]);
+    return () => {
+      isMounted = false;
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [currentUserId, searchQuery, canListUsers]);
 
   const handleRoleChange = async (userId, newRoleId) => {
+    if (!canChangeRoles || userId === currentUserId) return;
     try {
       await apiPut(`/users/${userId}/role?admin_user_id=${currentUserId}`, {
         role_id: newRoleId,
@@ -372,7 +380,7 @@ const Members = () => {
                           <Select
                             value={user.role_id || 1}
                             size="small"
-                            disabled={currentUserRole !== "SUPER_ADMIN" || user.id === currentUserId}
+                            disabled={!canChangeRoles || user.id === currentUserId}
                             onChange={(e) => handleRoleChange(user.id, e.target.value)}
                             sx={{ minWidth: 120, textAlign: "left" }}
                           >
