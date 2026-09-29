@@ -50,6 +50,11 @@ export const resolveImageUrl = (rawUrl) => {
     return trimmed;
   }
 
+  // If path starts with /api/ or /pdf_thumbnail
+  if (trimmed.startsWith("/api/") || trimmed.startsWith("/pdf_thumbnail")) {
+    return `${apiBase}${trimmed}`;
+  }
+
   // If path starts with /
   if (trimmed.startsWith("/")) {
     if (trimmed.startsWith("/storage/")) {
