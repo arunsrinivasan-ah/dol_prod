@@ -19,6 +19,7 @@ import MediaPreviewModal from "./MediaPreviewModal";
 import FeedbackRatingButtons from "./FeedbackRatingButtons";
 
 import { resolveImageUrl } from "../../api/config";
+import PdfThumbnail from "./PdfThumbnail";
 
 // ─── Normalisers ───
 const normalizeVideo = (v) => ({
@@ -64,21 +65,40 @@ const normalizeImage = (img) => {
     ? resolveImageUrl(img.thumbnail || img.Thumbnail)
     : (img.Url || img.url ? resolveImageUrl(img.Url || img.url) : imageSrc);
 
+  const displayTitle =
+    img.title ||
+    img.Title ||
+    img.name ||
+    (img.About && typeof img.About === "string" && img.About.trim().length > 0 && img.About.length < 60
+      ? img.About.trim()
+      : (img.about && typeof img.about === "string" && img.about.trim().length > 0 && img.about.length < 60
+          ? img.about.trim()
+          : "Topic image"));
+
   return {
-    title: img.title || img.Title || img.name || "Topic image",
+    title: displayTitle,
     url: imageSrc,
     thumbnail: thumbSrc,
   };
 };
 
 const normalizePdf = (pdf) => {
-  if (!pdf) return { title: "", link: "" };
+  if (!pdf) return { title: "", link: "", thumbnail: "" };
   if (typeof pdf === "string") {
-    return { title: "Document", link: pdf };
+    return {
+      title: "Document",
+      link: pdf,
+      thumbnail: `/api/pdf_thumbnail?url=${encodeURIComponent(pdf)}`,
+    };
   }
+  const link = pdf.link || pdf.Link || pdf.url || pdf.Url || "";
   return {
     title: pdf.title || pdf.Title || "",
-    link: pdf.link || pdf.Link || pdf.url || pdf.Url || "",
+    link: link,
+    thumbnail:
+      pdf.thumbnail ||
+      pdf.Thumbnail ||
+      (link ? `/api/pdf_thumbnail?url=${encodeURIComponent(link)}` : ""),
   };
 };
 
@@ -215,7 +235,6 @@ const ChatMessage = ({
   skipMarkdownFormatting = false,
   plainText = false,
 }) => {
-  const [showAllVideos, setShowAllVideos] = useState(false);
   const isUser = msg.role === "user";
 
   const cleanPlainText = (text) => {
@@ -326,8 +345,28 @@ const ChatMessage = ({
     }
   };
 
-  // 1. Unified, deduplicated videos list (capped to strictly maximum 5)
+  const isOutOfScope =
+    msg.metadata?.out_of_scope === true ||
+    msg.category === "FALLBACK" ||
+    msg.category === "OFF_TOPIC" ||
+    (typeof msg.content === "string" && (
+      msg.content.toLowerCase().includes("outside the marine training curriculum") ||
+      msg.content.toLowerCase().includes("outside the maritime curriculum") ||
+      msg.content.toLowerCase().includes("specialized exclusively in maritime")
+    ));
+
+  const isGreeting =
+    msg.category === "GREETING" ||
+    (typeof msg.content === "string" && (
+      /^(\s*hello|\s*hi\b|\s*hey\b|\s*good\s+morning|\s*good\s+evening|\s*good\s+day)/i.test(msg.content) &&
+      msg.content.length < 250 &&
+      !/(video|videos|watch|clip)/i.test(msg.content)
+    ));
+
+  // 1. Unified, deduplicated videos list (capped to strictly maximum 5; greetings return none)
   const unifiedVideos = React.useMemo(() => {
+    if (isGreeting || isOutOfScope || isUser) return [];
+
     const rawList = [
       ...(msg.transcripts || []).map((t) => ({
         title: t.video_title || t.Title || t.title || (t.content ? `${t.content.substring(0, 45)}...` : "Course Video"),
@@ -360,30 +399,48 @@ const ChatMessage = ({
     }
 
     return result;
-  }, [msg.transcripts, msg.videos, videos_suggestions]);
+  }, [msg.transcripts, msg.videos, videos_suggestions, isGreeting, isOutOfScope, isUser]);
 
-  const normalizedImages = (images_suggestions || msg?.images || msg?.metadata?.images || [])
-    .map(normalizeImage)
-    .filter((img) => img.url);
+  const [failedImageUrls, setFailedImageUrls] = useState(() => new Set());
 
-  const normalizedPdfs = (pdf_suggestions || msg?.pdfs || msg?.metadata?.pdfs || [])
-    .map(normalizePdf)
-    .filter((pdf) => pdf.link);
+  // 2. Unified, deduplicated images list (capped to strictly maximum 5; broken images and raw scanned text pages excluded)
+  const normalizedImages = React.useMemo(() => {
+    if (isGreeting || isOutOfScope || isUser) return [];
+    const seen = new Set();
+    return (images_suggestions || msg?.images || msg?.metadata?.images || [])
+      .map(normalizeImage)
+      .filter((img) => {
+        if (!img || !img.url || typeof img.url !== "string" || img.url.trim().length === 0) return false;
+        if (failedImageUrls.has(img.url)) return false;
+
+        const normKey = img.url.toLowerCase().replace(/\/+/g, "/").replace(/\/+$/, "");
+        if (!normKey || seen.has(normKey)) return false;
+        seen.add(normKey);
+
+        const lowerUrl = img.url.toLowerCase();
+        const lowerTitle = (img.title || "").toLowerCase();
+        if ((lowerUrl.includes("/storage/pdf_images/") || lowerUrl.includes("_img_")) && (lowerTitle.includes("guide") || lowerTitle.includes("manual") || lowerTitle.includes("checklist") || lowerTitle.includes("handbook"))) {
+          return false;
+        }
+        return true;
+      })
+      .slice(0, 5);
+  }, [images_suggestions, msg?.images, msg?.metadata?.images, failedImageUrls, isGreeting, isOutOfScope, isUser]);
+
+  // 3. Unified, deduplicated PDFs list (capped to strictly maximum 5)
+  const normalizedPdfs = React.useMemo(() => {
+    if (isGreeting || isOutOfScope || isUser) return [];
+    return (pdf_suggestions || msg?.pdfs || msg?.metadata?.pdfs || [])
+      .map(normalizePdf)
+      .filter((pdf) => pdf && pdf.link && typeof pdf.link === "string" && pdf.link.trim().length > 0)
+      .slice(0, 5);
+  }, [pdf_suggestions, msg?.pdfs, msg?.metadata?.pdfs, isGreeting, isOutOfScope, isUser]);
 
   const questionSuggestions = msg.question_suggestions || [];
-  
-  const isOutOfScope =
-    msg.metadata?.out_of_scope === true ||
-    msg.category === "FALLBACK" ||
-    msg.category === "OFF_TOPIC" ||
-    (typeof msg.content === "string" && (
-      msg.content.toLowerCase().includes("outside the marine training curriculum") ||
-      msg.content.toLowerCase().includes("outside the maritime curriculum") ||
-      msg.content.toLowerCase().includes("specialized exclusively in maritime")
-    ));
 
   const shouldShowMedia =
     !isOutOfScope &&
+    !isGreeting &&
     Boolean(msg.content && msg.content.length > 0);
   const shouldShowQuestions =
     !isOutOfScope && questionSuggestions.length > 0;
@@ -439,16 +496,6 @@ const ChatMessage = ({
     overflow: "hidden",
     textOverflow: "ellipsis",
   };
-
-  const showMoreSx = {
-    mt: 1,
-    cursor: "pointer",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    color: "text.primary",
-  };
-
   // ── Render ────
   return (
     <>
@@ -662,7 +709,7 @@ const ChatMessage = ({
                 >
                   {normalizedImages.map((img, i) => (
                     <Box
-                      key={i}
+                      key={`${img.url}-${i}`}
                       sx={mediaCardSx}
                       onClick={() => openPreview("image", img.url)}
                     >
@@ -673,32 +720,19 @@ const ChatMessage = ({
                         sx={mediaThumbnailSx}
                         onError={(e) => {
                           const currentSrc = e.target.src || "";
-                          if (currentSrc.endsWith(".png")) {
+                          if (currentSrc.endsWith(".png") && !e.target.dataset.triedJpg) {
+                            e.target.dataset.triedJpg = "true";
                             e.target.src = currentSrc.replace(/\.png$/, ".jpg");
-                          } else if (currentSrc.endsWith(".jpg")) {
+                          } else if (currentSrc.endsWith(".jpg") && !e.target.dataset.triedJpeg) {
+                            e.target.dataset.triedJpeg = "true";
                             e.target.src = currentSrc.replace(/\.jpg$/, ".jpeg");
                           } else {
-                            e.target.style.display = 'none';
-                            const fallback = e.target.nextElementSibling;
-                            if (fallback && fallback.classList.contains('fallback-img-container')) {
-                              fallback.style.display = 'flex';
-                            }
+                            const card = e.target.parentElement;
+                            if (card) card.style.display = "none";
+                            setFailedImageUrls((prev) => new Set(prev).add(img.url));
                           }
                         }}
                       />
-                      <Box
-                        className="fallback-img-container"
-                        sx={{
-                          ...mediaThumbnailSx,
-                          display: "none",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          backgroundColor: "background.paper",
-                        }}
-                      >
-                        <ImageIcon size={40} color="primary.main" />
-                      </Box>
-
                       <Typography variant="caption" sx={mediaCaptionSx}>
                         {img.title}
                       </Typography>
@@ -733,14 +767,12 @@ const ChatMessage = ({
                     display: "flex",
                     gap: 2,
                     flexWrap: "wrap",
-                    maxHeight: showAllVideos ? "none" : { xs: 155, sm: 185 },
-                    overflow: "hidden",
                     py: 1,
                   }}
                 >
                   {unifiedVideos.map((video, i) => (
                     <Box
-                      key={`video-${i}`}
+                      key={`${video.url}-${i}`}
                       sx={mediaCardSx}
                       onClick={() => openPreview("video", video.url)}
                     >
@@ -796,21 +828,6 @@ const ChatMessage = ({
                     </Box>
                   ))}
                 </Box>
-
-                {unifiedVideos.length > 4 && (
-                  <Typography
-                    onClick={() => setShowAllVideos((p) => !p)}
-                    variant="body1"
-                    sx={showMoreSx}
-                  >
-                    {showAllVideos ? "Show less" : "Show more"}
-                    {showAllVideos ? (
-                      <KeyboardArrowUpIcon />
-                    ) : (
-                      <KeyboardArrowDownIcon />
-                    )}
-                  </Typography>
-                )}
               </Box>
             )}
 
@@ -844,21 +861,14 @@ const ChatMessage = ({
                 >
                   {normalizedPdfs.map((pdf, i) => (
                     <Box
-                      key={i}
+                      key={`${pdf.link}-${i}`}
                       sx={mediaCardSx}
                       onClick={() => window.open(pdf.link, "_blank")}
                     >
-                      <Box
-                        sx={{
-                          ...mediaThumbnailSx,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          backgroundColor: "background.paper",
-                        }}
-                      >
-                        <DocumentIcon size={40} color="primary.main" />
-                      </Box>
+                      <PdfThumbnail
+                        pdf={pdf}
+                        mediaThumbnailSx={mediaThumbnailSx}
+                      />
                       <Typography variant="caption" sx={mediaCaptionSx}>
                         {pdf.title}
                       </Typography>
