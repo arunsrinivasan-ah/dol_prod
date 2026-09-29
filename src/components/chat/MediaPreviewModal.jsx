@@ -9,10 +9,7 @@ import "react-pdf/dist/Page/TextLayer.css";
 
 import { pdfjs } from "react-pdf";
 
-pdfjs.GlobalWorkerOptions.workerSrc =
-  typeof window !== "undefined" && window.location
-    ? `${window.location.origin}/pdf.worker.min.mjs`
-    : `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 const BLOCKED_KEYS = ["Escape", "F12", "PrintScreen"];
 
