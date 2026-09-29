@@ -574,21 +574,19 @@ const Header = ({
 
             <Divider sx={{ my: 3 }} />
 
-            {profile?.user_role !== "USER" && (
-              <Button
-                fullWidth
-                variant="outlined"
-                color="primary"
-                sx={{ mb: 2, borderRadius: 2, textTransform: "none" }}
-                onClick={() => {
-                  setAnchorElFont(null);
-                  setSettingsView("general");
-                  navigate('/admin/chat-history');
-                }}
-              >
-                Admin Page
-              </Button>
-            )}
+            <Button
+              fullWidth
+              variant="outlined"
+              color="primary"
+              sx={{ mb: 2, borderRadius: 2, textTransform: "none" }}
+              onClick={() => {
+                setAnchorElFont(null);
+                setSettingsView("general");
+                navigate('/admin/chat-history');
+              }}
+            >
+              Admin Page
+            </Button>
 
             <Button
               fullWidth
