@@ -7,6 +7,7 @@ import ChatHistoryAdmin from "./pages/ChatHistoryAdmin.jsx";
 import AdminPage from "./pages/admin/AdminPage.jsx";
 import FeedbackPage from "./pages/feedback/FeedbackPage.jsx";
 import './App.css'
+import { clearChatHistoryCache } from "./api/chatHistoryCache";
 import { logout } from "./api/apiAuth.js";
 import { isFeedbackAuthorized, getCurrentUserEmail } from "./utils/feedbackAuth.js";
 
@@ -55,6 +56,7 @@ function App() {
   };
 
   const handleLogout = async () => {
+    clearChatHistoryCache();
     await logout();
     localStorage.removeItem("userId");
     localStorage.removeItem("user_id");
