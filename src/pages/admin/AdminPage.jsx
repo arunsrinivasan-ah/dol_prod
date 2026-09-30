@@ -5,7 +5,7 @@ import AdminSidebar from "../../components/admin/AdminSidebar";
 import { Outlet } from "react-router-dom";
 import { Box } from "@mui/material";
 
-const AdminPage = ({ onLogout }) => {
+const AdminPage = ({ onLogout, feedbackOnly = false }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
@@ -15,12 +15,12 @@ const AdminPage = ({ onLogout }) => {
           onLogout={onLogout}
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
-          drawerContent={<AdminSidebar setSidebarOpen={setSidebarOpen} />}
+          drawerContent={<AdminSidebar setSidebarOpen={setSidebarOpen} feedbackOnly={feedbackOnly} />}
         />
       }
-      leftPanel={<AdminSidebar setSidebarOpen={setSidebarOpen} />}
+      leftPanel={<AdminSidebar setSidebarOpen={setSidebarOpen} feedbackOnly={feedbackOnly} />}
       contentPanel={
-        <Box sx={{ flex: 1, overflowY: "auto", bgcolor: 'background.default', height: "100%" }}>
+        <Box sx={{ flex: 1, minWidth: 0, overflowY: "auto", bgcolor: 'background.default', height: "100%" }}>
           <Outlet />
         </Box>
       }

@@ -217,7 +217,7 @@ const FeedbackDashboard = ({
             borderRadius: 12,
             border: "1px solid rgba(220, 38, 38, 0.3)",
             backgroundColor: "rgba(220, 38, 38, 0.08)",
-            color: "#dc2626",
+            color: "var(--fb-danger)",
             fontSize: 12,
             marginBottom: 20,
           }}
@@ -238,7 +238,7 @@ const FeedbackDashboard = ({
               borderRadius: 8,
               border: "1px solid rgba(220, 38, 38, 0.3)",
               backgroundColor: "transparent",
-              color: "#dc2626",
+              color: "var(--fb-danger)",
               cursor: "pointer",
             }}
           >

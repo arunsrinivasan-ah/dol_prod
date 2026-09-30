@@ -24,8 +24,8 @@ const KpiCard = ({
       style={{
         padding: "16px 20px",
         borderRadius: 16,
-        backgroundColor: "#ffffff",
-        border: borderHighlight ? "1.5px solid #f59e0b" : "1px solid #e2e8f0",
+        backgroundColor: "var(--fb-bg-paper)",
+        border: borderHighlight ? "1.5px solid #f59e0b" : "1px solid var(--fb-border)",
         boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
         display: "flex",
         flexDirection: "column",
@@ -35,7 +35,7 @@ const KpiCard = ({
       }}
     >
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#5c7080" }}>
+        <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--fb-text-secondary)" }}>
           {title}
         </span>
         <div
@@ -57,15 +57,15 @@ const KpiCard = ({
 
       <div style={{ display: "flex", flexDirection: "column", marginTop: "auto" }}>
         {loading ? (
-          <div style={{ height: 28, width: 80, backgroundColor: "#e2e8f0", borderRadius: 8, marginBottom: 4 }} />
+          <div style={{ height: 28, width: 80, backgroundColor: "var(--fb-border)", borderRadius: 8, marginBottom: 4 }} />
         ) : (
-          <span style={{ fontSize: 26, fontWeight: 800, color: "#0f1c2e", lineHeight: 1.1, margin: "2px 0", display: "block" }}>
+          <span style={{ fontSize: 26, fontWeight: 800, color: "var(--fb-text-primary)", lineHeight: 1.1, margin: "2px 0", display: "block" }}>
             {value}
           </span>
         )}
 
         {subtext && (
-          <span style={{ fontSize: 11, color: "#5c7080", fontWeight: 500, display: "block", marginTop: 2 }}>
+          <span style={{ fontSize: 11, color: "var(--fb-text-secondary)", fontWeight: 500, display: "block", marginTop: 2 }}>
             {subtext}
           </span>
         )}
@@ -103,7 +103,7 @@ const DashboardKpiCards = ({ summary = {}, loading = false }) => {
         value={total.toLocaleString()}
         subtext="Positive + Negative"
         icon={MessageSquare}
-        iconColor="#106BA3"
+        iconColor="var(--fb-primary)"
         iconBg="rgba(16, 107, 163, 0.12)"
         loading={loading}
       />
@@ -114,7 +114,7 @@ const DashboardKpiCards = ({ summary = {}, loading = false }) => {
         value={positive.toLocaleString()}
         subtext={`${positivePct}% of total ratings`}
         icon={ThumbsUp}
-        iconColor="#16a34a"
+        iconColor="var(--fb-success)"
         iconBg="rgba(22, 163, 74, 0.12)"
         loading={loading}
       />
@@ -125,7 +125,7 @@ const DashboardKpiCards = ({ summary = {}, loading = false }) => {
         value={negative.toLocaleString()}
         subtext={`${negativePct}% reported issues`}
         icon={ThumbsDown}
-        iconColor="#dc2626"
+        iconColor="var(--fb-danger)"
         iconBg="rgba(220, 38, 38, 0.12)"
         loading={loading}
       />
@@ -136,7 +136,7 @@ const DashboardKpiCards = ({ summary = {}, loading = false }) => {
         value={pending.toLocaleString()}
         subtext="Awaiting SME review"
         icon={Clock}
-        iconColor="#d97706"
+        iconColor="var(--fb-warning)"
         iconBg="rgba(217, 119, 6, 0.12)"
         borderHighlight={pending > 0 ? "border-amber-500/50" : null}
         loading={loading}
@@ -148,7 +148,7 @@ const DashboardKpiCards = ({ summary = {}, loading = false }) => {
         value={approved.toLocaleString()}
         subtext="In Memory & DPO"
         icon={CheckCircle2}
-        iconColor="#16a34a"
+        iconColor="var(--fb-success)"
         iconBg="rgba(22, 163, 74, 0.12)"
         loading={loading}
       />

@@ -70,7 +70,7 @@ function App() {
     return null;
   }
 
-  const isFeedbackAllowed = isFeedbackAuthorized(userEmail || getCurrentUserEmail());
+  const isFeedbackAllowed = isFeedbackAuthorized(userEmail || getCurrentUserEmail(), userRole);
 
   return userId ? (
     <Router basename={process.env.PUBLIC_URL || "/"}>
@@ -84,15 +84,17 @@ function App() {
           <Route index element={
             isFeedbackAllowed ? <Navigate to="feedback" replace /> : <Navigate to="chat-history" replace />
           } />
-          <Route path="feedback" element={
+          <Route path="feedback/*" element={
             isFeedbackAllowed ? <FeedbackPage onLogout={handleLogout} /> : <Navigate to="/admin/chat-history" replace />
           } />
           <Route path="chat-history" element={<ChatHistoryAdmin />} />
           <Route path="members" element={<Members />} />
         </Route>
         <Route path="/feedback" element={
-          isFeedbackAllowed ? <FeedbackPage onLogout={handleLogout} /> : <Navigate to="/" replace />
-        } />
+          isFeedbackAllowed ? <AdminPage onLogout={handleLogout} feedbackOnly /> : <Navigate to="/" replace />
+        }>
+          <Route path="*" element={<FeedbackPage />} />
+        </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

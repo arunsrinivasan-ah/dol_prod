@@ -6,20 +6,20 @@ import RateReviewIcon from '@mui/icons-material/RateReview';
 import { useThemeMode } from '../../context/ThemeModeContext';
 import { getSidebarWidth } from '../../theme/layoutScale';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { isFeedbackAuthorized, getCurrentUserEmail } from '../../utils/feedbackAuth';
+import { isFeedbackAuthorized, getCurrentUserEmail, getCurrentUserRole } from '../../utils/feedbackAuth';
 
-const AdminSidebar = ({ setSidebarOpen }) => {
+const AdminSidebar = ({ setSidebarOpen, feedbackOnly = false }) => {
   const { fontLevel } = useThemeMode();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isFeedbackAllowed = isFeedbackAuthorized(getCurrentUserEmail());
+  const isFeedbackAllowed = isFeedbackAuthorized(getCurrentUserEmail(), getCurrentUserRole());
 
   const allMenuItems = [
     {
       title: 'Feedback & Learning',
       icon: <RateReviewIcon />,
-      path: '/admin/feedback',
+      path: feedbackOnly ? '/feedback' : '/admin/feedback',
       feedbackOnly: true
     },
     {
@@ -34,13 +34,15 @@ const AdminSidebar = ({ setSidebarOpen }) => {
     }
   ];
 
-  const menuItems = allMenuItems.filter(item => !item.feedbackOnly || isFeedbackAllowed);
+  const menuItems = allMenuItems.filter(item => (!feedbackOnly || item.feedbackOnly) && (!item.feedbackOnly || isFeedbackAllowed));
 
   return (
     <Box
       sx={{
         width: { xs: "100%", md: getSidebarWidth(fontLevel) },
         p: 2,
+        flexShrink: 0,
+        overflowY: "auto",
         display: "flex",
         flexDirection: "column",
         boxSizing: "border-box",
@@ -58,7 +60,8 @@ const AdminSidebar = ({ setSidebarOpen }) => {
         {menuItems.map((item) => {
           const isActive = location.pathname.includes(item.path);
           return (
-            <ListItem key={item.title} disablePadding sx={{ mb: 1 }}>
+            <React.Fragment key={item.title}>
+            <ListItem disablePadding sx={{ mb: 1 }}>
               <ListItemButton
                 selected={isActive}
                 onClick={() => {
@@ -91,6 +94,25 @@ const AdminSidebar = ({ setSidebarOpen }) => {
                 />
               </ListItemButton>
             </ListItem>
+            {item.feedbackOnly && (
+              <List disablePadding aria-label="Feedback & Learning" sx={{ pl: 3, mb: 1 }}>
+                {["Dashboard", "Pending", "Approved"].map((title) => {
+                  const path = `${item.path}/${title.toLowerCase()}`;
+                  const selected = location.pathname === path || location.pathname.startsWith(`${path}/`)
+                    || (title === "Dashboard" && location.pathname.replace(/\/$/, "") === item.path);
+                  return (
+                    <ListItem key={title} disablePadding>
+                      <ListItemButton selected={selected} aria-current={selected ? "page" : undefined}
+                        sx={{ borderRadius: 2, color: selected ? "primary.main" : "text.secondary" }}
+                        onClick={() => { navigate(path); if (setSidebarOpen) setSidebarOpen(false); }}>
+                        <ListItemText primary={title} primaryTypographyProps={{ fontSize: "0.85rem", fontWeight: selected ? 700 : 400 }} />
+                      </ListItemButton>
+                    </ListItem>
+                  );
+                })}
+              </List>
+            )}
+            </React.Fragment>
           );
         })}
       </List>

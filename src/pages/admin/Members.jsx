@@ -219,6 +219,8 @@ const Members = () => {
     <Box
       sx={{
         minHeight: "100%",
+        width: "100%",
+        minWidth: 0,
         bgcolor: theme.palette.background.default,
         py: 3,
       }}
@@ -289,8 +291,13 @@ const Members = () => {
           {loading ? (
             <MainLoader />
           ) : (
-            <TableContainer>
-              <Table>
+            <TableContainer
+              tabIndex={0}
+              role="region"
+              aria-label="Members table"
+              sx={{ maxWidth: "100%", overflowX: "auto" }}
+            >
+              <Table sx={{ minWidth: 1200 }}>
                 <TableHead>
                   <TableRow
                     sx={{

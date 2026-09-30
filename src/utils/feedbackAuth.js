@@ -7,10 +7,19 @@ export const ALLOWED_FEEDBACK_EMAILS = [
   "karthikeyanc@compunetconnections.com",
 ];
 
-export const isFeedbackAuthorized = (userEmail) => {
+export const isFeedbackAuthorized = (userEmail, userRole) => {
+  if (userRole === "ADMIN" || userRole === "SUPER_ADMIN") return true;
   if (!userEmail || typeof userEmail !== "string") return false;
   const cleanEmail = userEmail.trim().toLowerCase();
   return ALLOWED_FEEDBACK_EMAILS.includes(cleanEmail);
+};
+
+export const getCurrentUserRole = () => {
+  try {
+    return JSON.parse(localStorage.getItem("userData") || "null")?.user_role || "";
+  } catch {
+    return "";
+  }
 };
 
 export const getCurrentUserEmail = () => {

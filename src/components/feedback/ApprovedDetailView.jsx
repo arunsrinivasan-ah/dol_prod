@@ -54,7 +54,7 @@ const ApprovedDetailView = ({
   if (loading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 380 }}>
-        <Loader2 style={{ width: 32, height: 32, color: "#106BA3", animation: "spin 1s linear infinite" }} />
+        <Loader2 style={{ width: 32, height: 32, color: "var(--fb-primary)", animation: "spin 1s linear infinite" }} />
       </div>
     );
   }
@@ -62,7 +62,7 @@ const ApprovedDetailView = ({
   if (!item) {
     return (
       <div style={{ padding: 32, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0f1c2e", margin: 0 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--fb-text-primary)", margin: 0 }}>
           Approved record not found.
         </h3>
         <button
@@ -134,14 +134,14 @@ const ApprovedDetailView = ({
           type="button"
           onClick={onBack}
           className="fb-back-btn"
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 12, border: "1px solid #e2e8f0", backgroundColor: "#ffffff", color: "#0f1c2e", fontSize: 12, fontWeight: 600, cursor: "pointer", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 12, border: "1px solid var(--fb-border)", backgroundColor: "var(--fb-bg-paper)", color: "var(--fb-text-primary)", fontSize: 12, fontWeight: 600, cursor: "pointer", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}
         >
           <ArrowLeft style={{ width: 16, height: 16 }} />
           <span>Back to Approved List</span>
         </button>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 9999, backgroundColor: "rgba(16, 107, 163, 0.12)", color: "#106BA3" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 9999, backgroundColor: "rgba(16, 107, 163, 0.12)", color: "var(--fb-primary)" }}>
             <Database style={{ width: 12, height: 12 }} />
             Active in Vector Store
           </span>
@@ -149,7 +149,7 @@ const ApprovedDetailView = ({
             <Cpu style={{ width: 12, height: 12 }} />
             DPO Ready
           </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 9999, backgroundColor: "rgba(22, 163, 74, 0.12)", color: "#16a34a" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 9999, backgroundColor: "rgba(22, 163, 74, 0.12)", color: "var(--fb-success)" }}>
             <CheckCircle2 style={{ width: 12, height: 12 }} />
             Approved
           </span>
@@ -157,14 +157,14 @@ const ApprovedDetailView = ({
       </div>
 
       {errorMsg && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 16px", borderRadius: 12, backgroundColor: "rgba(220, 38, 38, 0.08)", border: "1px solid rgba(220, 38, 38, 0.3)", color: "#dc2626", fontSize: 12, fontWeight: 600 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 16px", borderRadius: 12, backgroundColor: "rgba(220, 38, 38, 0.08)", border: "1px solid rgba(220, 38, 38, 0.3)", color: "var(--fb-danger)", fontSize: 12, fontWeight: 600 }}>
           <AlertTriangle style={{ width: 16, height: 16, flexShrink: 0 }} />
           <span>{errorMsg}</span>
         </div>
       )}
 
       {successMsg && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 16px", borderRadius: 12, backgroundColor: "rgba(22, 163, 74, 0.08)", border: "1px solid rgba(22, 163, 74, 0.3)", color: "#16a34a", fontSize: 12, fontWeight: 600 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 16px", borderRadius: 12, backgroundColor: "rgba(22, 163, 74, 0.08)", border: "1px solid rgba(22, 163, 74, 0.3)", color: "var(--fb-success)", fontSize: 12, fontWeight: 600 }}>
           <Check style={{ width: 16, height: 16, flexShrink: 0 }} />
           <span>{successMsg}</span>
         </div>
@@ -175,16 +175,16 @@ const ApprovedDetailView = ({
         {/* LEFT COLUMN: Original Question & Feedback Context */}
         <div style={{ display: "flex", flexDirection: "column", gap: 20, width: "100%" }}>
           {/* 1. User Question Card */}
-          <div className="fb-card" style={{ padding: 20, borderRadius: 16, backgroundColor: "#ffffff", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", margin: 0 }}>
+          <div className="fb-card" style={{ padding: 20, borderRadius: 16, backgroundColor: "var(--fb-bg-paper)", border: "1px solid var(--fb-border)", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", margin: 0 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <HelpCircle style={{ width: 16, height: 16, color: "#106BA3" }} />
-                <h4 style={{ fontSize: 14, fontWeight: 700, color: "#0f1c2e", margin: 0 }}>
+                <HelpCircle style={{ width: 16, height: 16, color: "var(--fb-primary)" }} />
+                <h4 style={{ fontSize: 14, fontWeight: 700, color: "var(--fb-text-primary)", margin: 0 }}>
                   User Question / RAG Trigger
                 </h4>
               </div>
               {isEditing && (
-                <span style={{ fontSize: 10, textTransform: "uppercase", fontWeight: 700, padding: "2px 8px", borderRadius: 9999, backgroundColor: "rgba(16, 107, 163, 0.15)", color: "#106BA3" }}>
+                <span style={{ fontSize: 10, textTransform: "uppercase", fontWeight: 700, padding: "2px 8px", borderRadius: 9999, backgroundColor: "rgba(16, 107, 163, 0.15)", color: "var(--fb-primary)" }}>
                   Editing
                 </span>
               )}
@@ -195,34 +195,34 @@ const ApprovedDetailView = ({
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 placeholder="Question trigger for vector memory lookup..."
-                style={{ width: "100%", padding: 10, fontSize: 12, borderRadius: 10, border: "1px solid #106BA3", outline: "none", boxSizing: "border-box", fontWeight: 600 }}
+                style={{ width: "100%", padding: 10, fontSize: 12, borderRadius: 10, border: "1px solid var(--fb-primary)", outline: "none", boxSizing: "border-box", fontWeight: 600 }}
               />
             ) : (
-              <div style={{ padding: 12, borderRadius: 10, backgroundColor: "rgba(16, 107, 163, 0.06)", borderLeft: "4px solid #106BA3", color: "#0f1c2e", fontSize: 13, fontWeight: 600 }}>
+              <div style={{ padding: 12, borderRadius: 10, backgroundColor: "rgba(16, 107, 163, 0.06)", borderLeft: "4px solid var(--fb-primary)", color: "var(--fb-text-primary)", fontSize: 13, fontWeight: 600 }}>
                 {question || item.question}
               </div>
             )}
           </div>
 
           {/* 2. Feedback & Approval Metadata Card */}
-          <div className="fb-card" style={{ padding: 20, borderRadius: 16, backgroundColor: "#ffffff", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", margin: 0 }}>
-            <h4 style={{ fontSize: 14, fontWeight: 700, color: "#0f1c2e", margin: "0 0 14px 0" }}>
+          <div className="fb-card" style={{ padding: 20, borderRadius: 16, backgroundColor: "var(--fb-bg-paper)", border: "1px solid var(--fb-border)", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", margin: 0 }}>
+            <h4 style={{ fontSize: 14, fontWeight: 700, color: "var(--fb-text-primary)", margin: "0 0 14px 0" }}>
               Review & Governance Metadata
             </h4>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 14, fontSize: 12 }}>
               <div>
-                <span style={{ color: "#5c7080", display: "block", marginBottom: 4, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Approved By:</span>
+                <span style={{ color: "var(--fb-text-secondary)", display: "block", marginBottom: 4, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Approved By:</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <ShieldCheck style={{ width: 16, height: 16, color: "#16a34a" }} />
-                  <span style={{ fontWeight: 700, color: "#0f1c2e" }}>
+                  <ShieldCheck style={{ width: 16, height: 16, color: "var(--fb-success)" }} />
+                  <span style={{ fontWeight: 700, color: "var(--fb-text-primary)" }}>
                     {item.reviewed_by_name || item.reviewed_by || "Administrator"}
                   </span>
                 </div>
               </div>
 
               <div>
-                <span style={{ color: "#5c7080", display: "block", marginBottom: 4, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Approved Date:</span>
-                <span style={{ fontWeight: 600, color: "#0f1c2e" }}>
+                <span style={{ color: "var(--fb-text-secondary)", display: "block", marginBottom: 4, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Approved Date:</span>
+                <span style={{ fontWeight: 600, color: "var(--fb-text-primary)" }}>
                   {(item.reviewed_at || item.resolved_at || item.updated_at)
                     ? new Date(item.reviewed_at || item.resolved_at || item.updated_at).toLocaleString()
                     : "-"}
@@ -230,46 +230,46 @@ const ApprovedDetailView = ({
               </div>
 
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#5c7080", marginBottom: 2, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--fb-text-secondary)", marginBottom: 2, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
                   <Building2 style={{ width: 14, height: 14 }} />
                   <span>Company:</span>
                 </div>
-                <span style={{ fontWeight: 700, color: "#0f1c2e" }}>
+                <span style={{ fontWeight: 700, color: "var(--fb-text-primary)" }}>
                   {item.company_id || "Global"}
                 </span>
               </div>
 
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#5c7080", marginBottom: 2, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--fb-text-secondary)", marginBottom: 2, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
                   <Ship style={{ width: 14, height: 14 }} />
                   <span>Ship Type:</span>
                 </div>
-                <span style={{ fontWeight: 700, color: "#0f1c2e" }}>
+                <span style={{ fontWeight: 700, color: "var(--fb-text-primary)" }}>
                   {item.ship_type || "General"}
                 </span>
               </div>
 
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#5c7080", marginBottom: 2, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--fb-text-secondary)", marginBottom: 2, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
                   <User style={{ width: 14, height: 14 }} />
                   <span>Original User:</span>
                 </div>
-                <span style={{ fontFamily: "monospace", color: "#0f1c2e", fontSize: 11 }}>
+                <span style={{ fontFamily: "monospace", color: "var(--fb-text-primary)", fontSize: 11 }}>
                   {item.user_id || "anonymous"}
                 </span>
               </div>
 
               <div>
-                <span style={{ color: "#5c7080", display: "block", marginBottom: 2, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Feedback Type:</span>
-                <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 9999, fontSize: 11, fontWeight: 600, border: "1px solid #e2e8f0", color: "#5c7080", textTransform: "capitalize" }}>
+                <span style={{ color: "var(--fb-text-secondary)", display: "block", marginBottom: 2, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Feedback Type:</span>
+                <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 9999, fontSize: 11, fontWeight: 600, border: "1px solid var(--fb-border)", color: "var(--fb-text-secondary)", textTransform: "capitalize" }}>
                   {item.feedback_type?.replace(/_/g, " ")}
                 </span>
               </div>
 
               {(item.admin_comment || item.reviewer_notes) && (
-                <div style={{ gridColumn: "span 2", paddingTop: 8, borderTop: "1px solid #e2e8f0" }}>
-                  <span style={{ color: "#5c7080", display: "block", marginBottom: 4, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Admin Review Note:</span>
-                  <div style={{ padding: 10, borderRadius: 10, backgroundColor: "#f8fafc", fontStyle: "italic", color: "#0f1c2e", border: "1px solid #e2e8f0" }}>
+                <div style={{ gridColumn: "span 2", paddingTop: 8, borderTop: "1px solid var(--fb-border)" }}>
+                  <span style={{ color: "var(--fb-text-secondary)", display: "block", marginBottom: 4, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Admin Review Note:</span>
+                  <div style={{ padding: 10, borderRadius: 10, backgroundColor: "var(--fb-bg-default)", fontStyle: "italic", color: "var(--fb-text-primary)", border: "1px solid var(--fb-border)" }}>
                     "{item.admin_comment || item.reviewer_notes}"
                   </div>
                 </div>
@@ -278,15 +278,15 @@ const ApprovedDetailView = ({
           </div>
 
           {/* 3. Exact Original Dolphin AI Response Card */}
-          <div className="fb-card" style={{ padding: 20, borderRadius: 16, backgroundColor: "#ffffff", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", margin: 0 }}>
+          <div className="fb-card" style={{ padding: 20, borderRadius: 16, backgroundColor: "var(--fb-bg-paper)", border: "1px solid var(--fb-border)", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", margin: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              <Bot style={{ width: 16, height: 16, color: "#dc2626" }} />
-              <h4 style={{ fontSize: 14, fontWeight: 700, color: "#0f1c2e", margin: 0 }}>
+              <Bot style={{ width: 16, height: 16, color: "var(--fb-danger)" }} />
+              <h4 style={{ fontSize: 14, fontWeight: 700, color: "var(--fb-text-primary)", margin: 0 }}>
                 Exact Original Response (Rejected in DPO)
               </h4>
             </div>
             <div
-              style={{ padding: 14, borderRadius: 12, backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", maxHeight: 320, overflowY: "auto", fontSize: 12, color: "#5c7080", lineHeight: 1.6 }}
+              style={{ padding: 14, borderRadius: 12, backgroundColor: "var(--fb-bg-default)", border: "1px solid var(--fb-border)", maxHeight: 320, overflowY: "auto", fontSize: 12, color: "var(--fb-text-secondary)", lineHeight: 1.6 }}
               dangerouslySetInnerHTML={{
                 __html: sanitizeMarkdown(item.original_response),
               }}
@@ -296,11 +296,11 @@ const ApprovedDetailView = ({
 
         {/* RIGHT COLUMN: Approved Preferred Response & Actions */}
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          <div className="fb-card" style={{ padding: 20, borderRadius: 16, backgroundColor: "#ffffff", border: "2px solid rgba(22, 163, 74, 0.5)", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", margin: 0, display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
+          <div className="fb-card" style={{ padding: 20, borderRadius: 16, backgroundColor: "var(--fb-bg-paper)", border: "2px solid rgba(22, 163, 74, 0.5)", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", margin: 0, display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <ShieldCheck style={{ width: 18, height: 18, color: "#16a34a" }} />
-                <h4 style={{ fontSize: 14, fontWeight: 700, color: "#16a34a", margin: 0 }}>
+                <ShieldCheck style={{ width: 18, height: 18, color: "var(--fb-success)" }} />
+                <h4 style={{ fontSize: 14, fontWeight: 700, color: "var(--fb-success)", margin: 0 }}>
                   Approved Preferred / Corrected Response
                 </h4>
               </div>
@@ -317,8 +317,8 @@ const ApprovedDetailView = ({
                         gap: 4,
                         padding: "6px 12px",
                         borderRadius: 10,
-                        border: "1px solid #106BA3",
-                        color: "#106BA3",
+                        border: "1px solid var(--fb-primary)",
+                        color: "var(--fb-primary)",
                         backgroundColor: "transparent",
                         fontSize: 11,
                         fontWeight: 700,
@@ -339,7 +339,7 @@ const ApprovedDetailView = ({
                         padding: "6px 10px",
                         borderRadius: 10,
                         border: "1px solid rgba(220, 38, 38, 0.3)",
-                        color: "#dc2626",
+                        color: "var(--fb-danger)",
                         backgroundColor: "transparent",
                         fontSize: 11,
                         fontWeight: 600,
@@ -351,7 +351,7 @@ const ApprovedDetailView = ({
                     </button>
                   </>
                 ) : (
-                  <div style={{ display: "flex", alignItems: "center", backgroundColor: "#f1f5f9", borderRadius: 10, padding: 3 }}>
+                  <div style={{ display: "flex", alignItems: "center", backgroundColor: "var(--fb-bg-default)", borderRadius: 10, padding: 3 }}>
                     <button
                       type="button"
                       onClick={() => setEditorTab(0)}
@@ -362,8 +362,8 @@ const ApprovedDetailView = ({
                         fontWeight: 700,
                         border: "none",
                         cursor: "pointer",
-                        backgroundColor: editorTab === 0 ? "#ffffff" : "transparent",
-                        color: editorTab === 0 ? "#106BA3" : "#5c7080",
+                        backgroundColor: editorTab === 0 ? "var(--fb-bg-paper)" : "transparent",
+                        color: editorTab === 0 ? "var(--fb-primary)" : "var(--fb-text-secondary)",
                         boxShadow: editorTab === 0 ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
                       }}
                     >
@@ -380,8 +380,8 @@ const ApprovedDetailView = ({
                         fontWeight: 700,
                         border: "none",
                         cursor: "pointer",
-                        backgroundColor: editorTab === 1 ? "#ffffff" : "transparent",
-                        color: editorTab === 1 ? "#106BA3" : "#5c7080",
+                        backgroundColor: editorTab === 1 ? "var(--fb-bg-paper)" : "transparent",
+                        color: editorTab === 1 ? "var(--fb-primary)" : "var(--fb-text-secondary)",
                         boxShadow: editorTab === 1 ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
                       }}
                     >
@@ -393,7 +393,7 @@ const ApprovedDetailView = ({
               </div>
             </div>
 
-            <p style={{ fontSize: 12, color: "#5c7080", margin: "0 0 12px 0", lineHeight: 1.4 }}>
+            <p style={{ fontSize: 12, color: "var(--fb-text-secondary)", margin: "0 0 12px 0", lineHeight: 1.4 }}>
               This verified standard is indexed in 3072-dimensional vector memory to serve future similar questions from this company.
             </p>
 
@@ -412,9 +412,9 @@ const ApprovedDetailView = ({
                       padding: 14,
                       fontSize: 12,
                       borderRadius: 12,
-                      backgroundColor: "#f8fafc",
+                      backgroundColor: "var(--fb-bg-default)",
                       border: "1px solid #cbd5e1",
-                      color: "#0f1c2e",
+                      color: "var(--fb-text-primary)",
                       fontFamily: "monospace",
                       lineHeight: 1.5,
                       outline: "none",
@@ -431,10 +431,10 @@ const ApprovedDetailView = ({
                       overflowY: "auto",
                       padding: 14,
                       borderRadius: 12,
-                      backgroundColor: "#f8fafc",
-                      border: "1px solid #e2e8f0",
+                      backgroundColor: "var(--fb-bg-default)",
+                      border: "1px solid var(--fb-border)",
                       fontSize: 12,
-                      color: "#0f1c2e",
+                      color: "var(--fb-text-primary)",
                       lineHeight: 1.6,
                     }}
                     dangerouslySetInnerHTML={{
@@ -443,7 +443,7 @@ const ApprovedDetailView = ({
                   />
                 )}
 
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, paddingTop: 10, borderTop: "1px solid #e2e8f0" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, paddingTop: 10, borderTop: "1px solid var(--fb-border)" }}>
                   <button
                     type="button"
                     onClick={() => {
@@ -452,7 +452,7 @@ const ApprovedDetailView = ({
                       setQuestion(item.question || "");
                     }}
                     disabled={saving}
-                    style={{ padding: "8px 14px", fontSize: 12, fontWeight: 600, color: "#5c7080", borderRadius: 10, border: "1px solid #cbd5e1", backgroundColor: "#ffffff", cursor: "pointer" }}
+                    style={{ padding: "8px 14px", fontSize: 12, fontWeight: 600, color: "var(--fb-text-secondary)", borderRadius: 10, border: "1px solid #cbd5e1", backgroundColor: "var(--fb-bg-paper)", cursor: "pointer" }}
                   >
                     Cancel
                   </button>
@@ -468,7 +468,7 @@ const ApprovedDetailView = ({
                       fontSize: 12,
                       fontWeight: 700,
                       color: "#ffffff",
-                      backgroundColor: "#16a34a",
+                      backgroundColor: "var(--fb-success)",
                       borderRadius: 10,
                       border: "none",
                       cursor: saving ? "not-allowed" : "pointer",
@@ -489,10 +489,10 @@ const ApprovedDetailView = ({
                   overflowY: "auto",
                   padding: 16,
                   borderRadius: 12,
-                  backgroundColor: "#f8fafc",
-                  border: "1px solid #e2e8f0",
+                  backgroundColor: "var(--fb-bg-default)",
+                  border: "1px solid var(--fb-border)",
                   fontSize: 12,
-                  color: "#0f1c2e",
+                  color: "var(--fb-text-primary)",
                   lineHeight: 1.6,
                 }}
                 dangerouslySetInnerHTML={{
