@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, Typography, List, ListItem, ListItemIcon, ListItemText, ListItemButton } from '@mui/material';
+import { Box, Button, Typography, List, ListItem, ListItemIcon, ListItemText, ListItemButton } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
 import GroupIcon from '@mui/icons-material/Group';
 import RateReviewIcon from '@mui/icons-material/RateReview';
@@ -52,6 +53,16 @@ const AdminSidebar = ({ setSidebarOpen, feedbackOnly = false }) => {
         borderColor: "divider"
       }}
     >
+      <Button
+        startIcon={<ArrowBackIcon />}
+        onClick={() => {
+          navigate('/');
+          if (setSidebarOpen) setSidebarOpen(false);
+        }}
+        sx={{ mb: 2, px: 2, justifyContent: 'flex-start', textTransform: 'none', borderRadius: 2 }}
+      >
+        Back to Chat
+      </Button>
       <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, px: 2, color: 'text.primary' }}>
         Admin Panel
       </Typography>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Box,
   Container,
@@ -26,7 +26,7 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 import CloseIcon from "@mui/icons-material/Close";
 import { useNavigate } from "react-router-dom";
-import { apiGet } from "../api/client";
+import { getChatHistory, getChatSession, clearChatHistoryCache } from "../api/chatHistoryCache";
 import DolphinIconW from "../assets/images/dolphin_w.png";
 import DolphinIconB from "../assets/images/dolphin_b.png";
 
@@ -86,6 +86,9 @@ const ChatHistoryAdmin = () => {
   const [sessionDate, setSessionDate] = useState("");
   const [studentName, setStudentName] = useState("");
   const [chatRows, setChatRows] = useState([]);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const detailRequest = useRef(0);
+  useEffect(() => () => { detailRequest.current += 1; }, []);
   const [totalRows, setTotalRows] = useState(0);
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [loading, setLoading] = useState(false);
@@ -98,8 +101,8 @@ const ChatHistoryAdmin = () => {
   const [sessionLoading, setSessionLoading] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     const timer = setTimeout(async () => {
-      let isMounted = true;
       const fetchChatHistory = async () => {
         setLoading(true);
 
@@ -112,7 +115,7 @@ const ChatHistoryAdmin = () => {
           if (sessionDate) query.session_date = sessionDate;
           if (studentName) query.student_name = studentName;
 
-          const data = await apiGet("/sessions/", { query });
+          const data = await getChatHistory(query);
 
           if (!isMounted) return;
 
@@ -141,13 +144,13 @@ const ChatHistoryAdmin = () => {
 
       fetchChatHistory();
 
-      return () => {
-        isMounted = false;
-      };
     }, 400);
 
-    return () => clearTimeout(timer);
-  }, [sessionDate, studentName, currentPage]);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [sessionDate, studentName, currentPage, refreshVersion]);
 
   const totalPages = Math.ceil(totalRows / ROWS_PER_PAGE);
 
@@ -167,22 +170,16 @@ const ChatHistoryAdmin = () => {
     setSessionLoading(true);
     setSessionDetails(null);
 
-    // Defer API call to ensure the side panel opens ASAP
-    setTimeout(async () => {
-      try {
-        const url = row.id
-          ? `/sessions/${row.session_id}?user_id=${row.id}`
-          : `/sessions/${row.session_id}`;
-
-        const data = await apiGet(url);
-        setSessionDetails(data);
-      } catch (err) {
-        setSnackbarMessage(err.message || "Failed to load session details");
-        setSnackbarSeverity("error");
-      } finally {
-        setSessionLoading(false);
-      }
-    }, 0);
+    const requestId = ++detailRequest.current;
+    getChatSession(row).then((data) => {
+      if (requestId === detailRequest.current) setSessionDetails(data);
+    }).catch((err) => {
+      if (requestId !== detailRequest.current) return;
+      setSnackbarMessage(err.message || "Failed to load session details");
+      setSnackbarSeverity("error");
+    }).finally(() => {
+      if (requestId === detailRequest.current) setSessionLoading(false);
+    });
   };
 
   const handlePageChange = (event, value) => {
@@ -246,6 +243,18 @@ const ChatHistoryAdmin = () => {
               }}
             >
               Reset
+            </Button>
+            <Button
+              variant="outlined"
+              disabled={loading}
+              onClick={() => {
+                clearChatHistoryCache();
+                setChatRows([]);
+                setRefreshVersion((value) => value + 1);
+              }}
+              sx={{ textTransform: "none" }}
+            >
+              Refresh
             </Button>
           </Stack>
 
