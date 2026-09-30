@@ -878,6 +878,7 @@ const ChatMessage = ({
               </Box>
             )}
 
+            {/* Related Courses UI temporarily hidden.
             {(() => {
               if (isOutOfScope || !msg.checkLicCoursesData || !Array.isArray(msg.checkLicCoursesData) || msg.checkLicCoursesData.length === 0) return null;
 
@@ -961,6 +962,8 @@ const ChatMessage = ({
               );
             })()}
 
+
+            */}
 
             {/* Follow-up suggestions */}
             {shouldShowQuestions && (
