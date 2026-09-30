@@ -47,6 +47,23 @@ export const submitFeedback = async (feedbackData) => {
 };
 
 /**
+ * Delete feedback item by ID
+ */
+export const deleteFeedback = async (feedbackId) => {
+  const response = await feedbackClient.delete(`/${feedbackId}`);
+  return response.data;
+};
+
+/**
+ * Delete feedback item by session ID and message ID
+ */
+export const deleteFeedbackByMessage = async (sessionId, messageId, userId = null) => {
+  const params = userId ? { user_id: userId } : {};
+  const response = await feedbackClient.delete(`/session/${sessionId}/message/${messageId}`, { params });
+  return response.data;
+};
+
+/**
  * Get dynamic feedback statistics (Pending, Approved, Rejected counts)
  */
 export const fetchFeedbackStats = async (companyId = null) => {
@@ -341,8 +358,10 @@ export const fetchDpoJobDetail = async (jobId) => {
  * Unified feedbackApi Object Export with Full Named & Aliased Method Support
  */
 export const feedbackApi = {
-  // Submission
+  // Submission & Deletion
   submitFeedback,
+  deleteFeedback,
+  deleteFeedbackByMessage,
 
   // Stats & Dashboard
   getStats: fetchFeedbackStats,

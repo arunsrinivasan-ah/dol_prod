@@ -23,6 +23,7 @@ import { resolveImageUrl } from "../../api/config";
 import { useThemeMode } from "../../context/ThemeModeContext";
 import { Message } from "../../assets/svgIcons/message";
 import { Saveoutlined } from "../../assets/svgIcons/SaveIconOutlined";
+import { SaveIcon } from "../../assets/svgIcons/Saveicon";
 import DolphinIconW from "../../assets/images/dolphin_w.png";
 import DolphinIconB from "../../assets/images/dolphin_b.png";
 import { getContentWidth } from "../../theme/layoutScale";
@@ -352,15 +353,15 @@ const ChatWindow = ({
   }, []);
 
   // ── Saved sessions ──
-  const isCurrentSaved = savedSessions.some(
-    (s) => s.session_id === currentSessionId,
-  );
+  const isCurrentSaved =
+    Boolean(currentSessionData?.is_saved) ||
+    savedSessions.some((s) => s.session_id === currentSessionId);
 
   useEffect(() => {
     getSavedSessions()
       .then((res) => setSavedSessions(res.saved_sessions || []))
       .catch((err) => console.error("Failed to load saved sessions", err));
-  }, []);
+  }, [currentSessionId]);
 
   // ── Feedback submission handler ──
   const handleFeedbackSubmit = useCallback(async (feedbackData) => {
@@ -725,16 +726,34 @@ const ChatWindow = ({
     }
     try {
       const res = await saveSession(currentSessionId);
-      if (res.is_saved) {
-        setSaveDialog({
-          open: true,
-          message: "Chat saved successfully",
-          isError: false,
+      const isSaved = Boolean(res.is_saved);
+
+      setSaveDialog({
+        open: true,
+        message: isSaved ? "Chat saved successfully" : "Removed from saved chats",
+        isError: false,
+      });
+
+      // Update local state immediately
+      if (isSaved) {
+        setSavedSessions((prev) => {
+          if (prev.some((s) => s.session_id === currentSessionId)) return prev;
+          return [...prev, { session_id: currentSessionId, ...currentSessionData, is_saved: true }];
         });
-        await fetchSessions?.();
-        const savedRes = await getSavedSessions();
+      } else {
+        setSavedSessions((prev) => prev.filter((s) => s.session_id !== currentSessionId));
+      }
+
+      if (currentSessionData) {
+        currentSessionData.is_saved = isSaved;
+      }
+
+      await fetchSessions?.();
+      const savedRes = await getSavedSessions();
+      if (savedRes && Array.isArray(savedRes.saved_sessions)) {
+        setSavedSessions(savedRes.saved_sessions);
         const savedIds = new Set(
-          (savedRes.saved_sessions || []).map((s) => s.session_id),
+          savedRes.saved_sessions.map((s) => s.session_id),
         );
         fetchSessions?.(undefined, (prev) =>
           prev.map((s) => ({ ...s, is_saved: savedIds.has(s.session_id) })),
@@ -897,23 +916,33 @@ const ChatWindow = ({
         </Box>
 
         <Box
-          onClick={!isCurrentSaved ? handleSaveChat : undefined}
+          onClick={handleSaveChat}
           sx={{
             display: "flex",
             alignItems: "center",
             gap: 1,
-            cursor: isCurrentSaved ? "not-allowed" : "pointer",
-            opacity: isCurrentSaved ? 0.5 : 1,
-            pointerEvents: isCurrentSaved ? "none" : "auto",
+            cursor: "pointer",
+            transition: "opacity 0.2s ease",
+            "&:hover": { opacity: 0.8 },
           }}
         >
-          <Saveoutlined
-            size={22}
-            color={mode === "dark" ? "#1cb0f6" : "#106BA3"}
-          />
+          {isCurrentSaved ? (
+            <SaveIcon
+              size={22}
+              color={mode === "dark" ? "#1cb0f6" : "#106BA3"}
+            />
+          ) : (
+            <Saveoutlined
+              size={22}
+              color={mode === "dark" ? "#1cb0f6" : "#106BA3"}
+            />
+          )}
           <Typography
             variant="body1"
-            sx={{ color: "text.primary", fontWeight: 500 }}
+            sx={{
+              color: isCurrentSaved ? (mode === "dark" ? "#1cb0f6" : "#106BA3") : "text.primary",
+              fontWeight: isCurrentSaved ? 600 : 500,
+            }}
           >
             {isCurrentSaved ? "Saved Chat" : "Save Chat"}
           </Typography>

@@ -92,8 +92,37 @@ const normalizePdf = (pdf) => {
     };
   }
   const link = pdf.link || pdf.Link || pdf.url || pdf.Url || "";
+
+  let title = (pdf.title || pdf.Title || pdf.name || pdf.Name || "").trim();
+  if (!title && (pdf.about || pdf.About)) {
+    const aboutStr = String(pdf.about || pdf.About).replace(/<[^>]+>/g, "").trim();
+    if (aboutStr) {
+      if (aboutStr.includes("-")) {
+        const parts = aboutStr.split("-").map((p) => p.trim()).filter(Boolean);
+        title = parts[parts.length - 1] || aboutStr;
+      } else {
+        title = aboutStr.length > 55 ? `${aboutStr.substring(0, 52)}...` : aboutStr;
+      }
+    }
+  }
+  if (!title && (pdf.topic_name || pdf.topicName || pdf.TopicName)) {
+    title = String(pdf.topic_name || pdf.topicName || pdf.TopicName).trim();
+  }
+  if (!title && link) {
+    try {
+      const pathname = new URL(link, window.location.origin).pathname;
+      const filename = pathname.split("/").pop().replace(/\.pdf$/i, "");
+      if (filename && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(filename) && !/^[0-9a-f]{20,}/i.test(filename)) {
+        title = decodeURIComponent(filename).replace(/[-_]+/g, " ").trim();
+      }
+    } catch (_) {}
+  }
+  if (!title) {
+    title = "Reference Document";
+  }
+
   return {
-    title: pdf.title || pdf.Title || "",
+    title: title,
     link: link,
     thumbnail:
       pdf.thumbnail ||
@@ -455,11 +484,18 @@ const ChatMessage = ({
     if (!timestamp) return "";
     const date = new Date(timestamp);
     if (isNaN(date.getTime())) return "";
-    return date.toLocaleTimeString("en-US", {
+
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+
+    const time = date.toLocaleTimeString("en-US", {
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
     });
+
+    return `${day}/${month}/${year}, ${time}`;
   };
 
   // ── Shared card style ───
@@ -864,12 +900,13 @@ const ChatMessage = ({
                       key={`${pdf.link}-${i}`}
                       sx={mediaCardSx}
                       onClick={() => window.open(pdf.link, "_blank")}
+                      title={pdf.title}
                     >
                       <PdfThumbnail
                         pdf={pdf}
                         mediaThumbnailSx={mediaThumbnailSx}
                       />
-                      <Typography variant="caption" sx={mediaCaptionSx}>
+                      <Typography variant="caption" sx={mediaCaptionSx} title={pdf.title}>
                         {pdf.title}
                       </Typography>
                     </Box>
@@ -1021,7 +1058,7 @@ const ChatMessage = ({
                   question={userQuestion || msg.question || ""}
                   originalResponse={typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content)}
                   conversationId={sessionId}
-                  messageId={messageIndex + 1}
+                  messageId={msg.message_id || messageIndex + 1}
                   companyId={localStorage.getItem("company_id") || localStorage.getItem("companyId")}
                   shipType={localStorage.getItem("ship_type") || localStorage.getItem("shipType")}
                   sourceMetadata={{
@@ -1029,6 +1066,7 @@ const ChatMessage = ({
                     sections: msg.sections,
                     chunks_used: msg.chunks_used,
                   }}
+                  initialRating={msg.like === 1 ? "positive" : msg.like === -1 ? "negative" : null}
                 />
               </Box>
             )}

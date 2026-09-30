@@ -60,7 +60,7 @@ const FeedbackModal = ({
       const categoryObj = FEEDBACK_CATEGORIES.find((c) => c.value === selectedCategory);
       const categoryLabel = categoryObj ? categoryObj.label : selectedCategory;
 
-      await feedbackApi.submitFeedback({
+      const res = await feedbackApi.submitFeedback({
         question: question || "User Question",
         original_response: originalResponse || "",
         feedback_type: "negative",
@@ -78,7 +78,7 @@ const FeedbackModal = ({
       });
 
       onClose();
-      if (onSuccess) onSuccess();
+      if (onSuccess) onSuccess(res);
       // Reset state
       setCommentText("");
       setSelectedCategory("incorrect_information");
