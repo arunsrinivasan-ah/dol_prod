@@ -28,9 +28,9 @@ const CATEGORY_OPTIONS = [
 const selectStyle = {
   padding: "6px 12px",
   borderRadius: 10,
-  border: "1px solid #e2e8f0",
-  backgroundColor: "#f8fafc",
-  color: "#0f1c2e",
+  border: "1px solid var(--fb-border)",
+  backgroundColor: "var(--fb-bg-default)",
+  color: "var(--fb-text-primary)",
   fontSize: 12,
   fontWeight: 500,
   cursor: "pointer",
@@ -81,14 +81,14 @@ const DashboardHeader = ({
             style={{
               fontSize: 24,
               fontWeight: 800,
-              color: "#0f1c2e",
+              color: "var(--fb-text-primary)",
               letterSpacing: "-0.02em",
               margin: 0,
             }}
           >
             Feedback Dashboard
           </h2>
-          <p style={{ fontSize: 12, color: "#5c7080", margin: "4px 0 0 0" }}>
+          <p style={{ fontSize: 12, color: "var(--fb-text-secondary)", margin: "4px 0 0 0" }}>
             Monitor Dolphin AI response quality, user feedback, and review progress.
           </p>
         </div>
@@ -104,11 +104,11 @@ const DashboardHeader = ({
                 gap: 6,
                 padding: "6px 14px",
                 borderRadius: 12,
-                border: "1px solid #e2e8f0",
-                color: "#5c7080",
+                border: "1px solid var(--fb-border)",
+                color: "var(--fb-text-secondary)",
                 fontSize: 12,
                 fontWeight: 600,
-                background: "#ffffff",
+                background: "var(--fb-bg-paper)",
                 cursor: "pointer",
               }}
             >
@@ -127,7 +127,7 @@ const DashboardHeader = ({
               gap: 6,
               padding: "8px 18px",
               borderRadius: 12,
-              backgroundColor: "#106BA3",
+              backgroundColor: "var(--fb-primary)",
               color: "#ffffff",
               fontSize: 12,
               fontWeight: 600,
@@ -157,14 +157,14 @@ const DashboardHeader = ({
           gap: 12,
           padding: "10px 16px",
           borderRadius: 16,
-          backgroundColor: "#ffffff",
-          border: "1px solid #e2e8f0",
+          backgroundColor: "var(--fb-bg-paper)",
+          border: "1px solid var(--fb-border)",
           boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
           flexWrap: "wrap",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#5c7080", marginRight: 6 }}>
-          <Filter style={{ width: 14, height: 14, color: "#106BA3" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--fb-text-secondary)", marginRight: 6 }}>
+          <Filter style={{ width: 14, height: 14, color: "var(--fb-primary)" }} />
           <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             Filters
           </span>
@@ -192,7 +192,7 @@ const DashboardHeader = ({
               onChange={(e) => onFilterChange({ ...filters, fromDate: e.target.value })}
               style={{ ...selectStyle, padding: "4px 8px" }}
             />
-            <span style={{ fontSize: 12, color: "#5c7080" }}>to</span>
+            <span style={{ fontSize: 12, color: "var(--fb-text-secondary)" }}>to</span>
             <input
               type="date"
               value={filters.toDate || ""}

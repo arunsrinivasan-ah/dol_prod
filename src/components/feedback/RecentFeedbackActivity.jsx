@@ -15,7 +15,7 @@ const getFeedbackTypeChip = (type) => {
             fontSize: 11,
             fontWeight: 600,
             backgroundColor: "rgba(22, 163, 74, 0.12)",
-            color: "#16a34a",
+            color: "var(--fb-success)",
           }}
         >
           <ThumbsUp style={{ width: 12, height: 12 }} /> Positive
@@ -32,7 +32,7 @@ const getFeedbackTypeChip = (type) => {
             fontSize: 11,
             fontWeight: 600,
             border: "1px solid rgba(220, 38, 38, 0.3)",
-            color: "#dc2626",
+            color: "var(--fb-danger)",
             backgroundColor: "rgba(220, 38, 38, 0.1)",
           }}
         >
@@ -50,7 +50,7 @@ const getFeedbackTypeChip = (type) => {
             fontSize: 11,
             fontWeight: 600,
             border: "1px solid rgba(217, 119, 6, 0.3)",
-            color: "#d97706",
+            color: "var(--fb-warning)",
             backgroundColor: "rgba(217, 119, 6, 0.1)",
           }}
         >
@@ -121,8 +121,8 @@ const getFeedbackTypeChip = (type) => {
             borderRadius: 9999,
             fontSize: 11,
             fontWeight: 600,
-            border: "1px solid #e2e8f0",
-            color: "#5c7080",
+            border: "1px solid var(--fb-border)",
+            color: "var(--fb-text-secondary)",
           }}
         >
           {type || "Feedback"}
@@ -143,7 +143,7 @@ const getStatusBadge = (status, feedbackType) => {
           fontSize: 11,
           fontWeight: 700,
           backgroundColor: "rgba(22, 163, 74, 0.12)",
-          color: "#16a34a",
+          color: "var(--fb-success)",
         }}
       >
         Positive 👍
@@ -161,7 +161,7 @@ const getStatusBadge = (status, feedbackType) => {
           fontSize: 11,
           fontWeight: 700,
           backgroundColor: "rgba(22, 163, 74, 0.12)",
-          color: "#16a34a",
+          color: "var(--fb-success)",
         }}
       >
         Approved
@@ -196,7 +196,7 @@ const getStatusBadge = (status, feedbackType) => {
         fontSize: 11,
         fontWeight: 700,
         backgroundColor: "rgba(217, 119, 6, 0.12)",
-        color: "#d97706",
+        color: "var(--fb-warning)",
       }}
     >
       Pending
@@ -233,8 +233,8 @@ const RecentFeedbackActivity = ({
       style={{
         padding: 20,
         borderRadius: 16,
-        backgroundColor: "#ffffff",
-        border: "1px solid #e2e8f0",
+        backgroundColor: "var(--fb-bg-paper)",
+        border: "1px solid var(--fb-border)",
         boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
         height: "100%",
         display: "flex",
@@ -260,7 +260,7 @@ const RecentFeedbackActivity = ({
               height: 34,
               borderRadius: 10,
               backgroundColor: "rgba(16, 107, 163, 0.1)",
-              color: "#106BA3",
+              color: "var(--fb-primary)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -269,7 +269,7 @@ const RecentFeedbackActivity = ({
           >
             <History style={{ width: 18, height: 18 }} />
           </div>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: "#0f1c2e", margin: 0 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--fb-text-primary)", margin: 0 }}>
             Recent Feedback Activity
           </h3>
         </div>
@@ -283,7 +283,7 @@ const RecentFeedbackActivity = ({
             gap: 4,
             fontSize: 12,
             fontWeight: 600,
-            color: "#106BA3",
+            color: "var(--fb-primary)",
             background: "transparent",
             border: "none",
             cursor: "pointer",
@@ -299,12 +299,12 @@ const RecentFeedbackActivity = ({
       <div style={{ flex: 1, overflowX: "auto" }}>
         {loading ? (
           <div style={{ padding: "8px 0", display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ height: 40, backgroundColor: "#e2e8f0", borderRadius: 8, width: "100%" }} />
-            <div style={{ height: 40, backgroundColor: "#e2e8f0", borderRadius: 8, width: "100%" }} />
-            <div style={{ height: 40, backgroundColor: "#e2e8f0", borderRadius: 8, width: "100%" }} />
+            <div style={{ height: 40, backgroundColor: "var(--fb-border)", borderRadius: 8, width: "100%" }} />
+            <div style={{ height: 40, backgroundColor: "var(--fb-border)", borderRadius: 8, width: "100%" }} />
+            <div style={{ height: 40, backgroundColor: "var(--fb-border)", borderRadius: 8, width: "100%" }} />
           </div>
         ) : safeRecent.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "32px 0", color: "#5c7080", fontSize: 12 }}>
+          <div style={{ textAlign: "center", padding: "32px 0", color: "var(--fb-text-secondary)", fontSize: 12 }}>
             No recent feedback recorded.
           </div>
         ) : (
@@ -313,7 +313,7 @@ const RecentFeedbackActivity = ({
             style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}
           >
             <thead>
-              <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
+              <tr style={{ borderBottom: "1px solid var(--fb-border)" }}>
                 <th
                   style={{
                     padding: "10px 12px",
@@ -321,8 +321,8 @@ const RecentFeedbackActivity = ({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    color: "#5c7080",
-                    backgroundColor: "#f8fafc",
+                    color: "var(--fb-text-secondary)",
+                    backgroundColor: "var(--fb-bg-default)",
                     width: 48,
                   }}
                 >
@@ -335,8 +335,8 @@ const RecentFeedbackActivity = ({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    color: "#5c7080",
-                    backgroundColor: "#f8fafc",
+                    color: "var(--fb-text-secondary)",
+                    backgroundColor: "var(--fb-bg-default)",
                     minWidth: 220,
                   }}
                 >
@@ -349,8 +349,8 @@ const RecentFeedbackActivity = ({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    color: "#5c7080",
-                    backgroundColor: "#f8fafc",
+                    color: "var(--fb-text-secondary)",
+                    backgroundColor: "var(--fb-bg-default)",
                     width: 140,
                   }}
                 >
@@ -363,8 +363,8 @@ const RecentFeedbackActivity = ({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    color: "#5c7080",
-                    backgroundColor: "#f8fafc",
+                    color: "var(--fb-text-secondary)",
+                    backgroundColor: "var(--fb-bg-default)",
                     width: 110,
                   }}
                 >
@@ -377,8 +377,8 @@ const RecentFeedbackActivity = ({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    color: "#5c7080",
-                    backgroundColor: "#f8fafc",
+                    color: "var(--fb-text-secondary)",
+                    backgroundColor: "var(--fb-bg-default)",
                     width: 100,
                   }}
                 >
@@ -391,8 +391,8 @@ const RecentFeedbackActivity = ({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    color: "#5c7080",
-                    backgroundColor: "#f8fafc",
+                    color: "var(--fb-text-secondary)",
+                    backgroundColor: "var(--fb-bg-default)",
                     width: 120,
                   }}
                 >
@@ -405,8 +405,8 @@ const RecentFeedbackActivity = ({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    color: "#5c7080",
-                    backgroundColor: "#f8fafc",
+                    color: "var(--fb-text-secondary)",
+                    backgroundColor: "var(--fb-bg-default)",
                     textAlign: "center",
                     width: 80,
                   }}
@@ -424,7 +424,7 @@ const RecentFeedbackActivity = ({
                     key={item.feedback_id}
                     onClick={() => onSelectItem && onSelectItem(item.feedback_id, item.status)}
                     style={{
-                      borderBottom: "1px solid #e2e8f0",
+                      borderBottom: "1px solid var(--fb-border)",
                       cursor: "pointer",
                       transition: "background-color 0.2s ease",
                     }}
@@ -432,11 +432,11 @@ const RecentFeedbackActivity = ({
                     <td style={{ padding: "10px 12px" }}>
                       {isPos ? (
                         <span title="Helpful 👍">
-                          <ThumbsUp style={{ width: 16, height: 16, color: "#16a34a" }} />
+                          <ThumbsUp style={{ width: 16, height: 16, color: "var(--fb-success)" }} />
                         </span>
                       ) : (
                         <span title="Reported Issue 👎">
-                          <ThumbsDown style={{ width: 16, height: 16, color: "#dc2626" }} />
+                          <ThumbsDown style={{ width: 16, height: 16, color: "var(--fb-danger)" }} />
                         </span>
                       )}
                     </td>
@@ -446,7 +446,7 @@ const RecentFeedbackActivity = ({
                         style={{
                           fontSize: 12,
                           fontWeight: 600,
-                          color: "#0f1c2e",
+                          color: "var(--fb-text-primary)",
                           maxWidth: 380,
                           whiteSpace: "nowrap",
                           overflow: "hidden",
@@ -460,7 +460,7 @@ const RecentFeedbackActivity = ({
                     <td style={{ padding: "10px 12px" }}>{getFeedbackTypeChip(item.feedback_type)}</td>
 
                     <td style={{ padding: "10px 12px" }}>
-                      <span style={{ fontSize: 12, color: "#5c7080", fontWeight: 500 }}>
+                      <span style={{ fontSize: 12, color: "var(--fb-text-secondary)", fontWeight: 500 }}>
                         {item.company_id || "Global"}
                       </span>
                     </td>
@@ -468,7 +468,7 @@ const RecentFeedbackActivity = ({
                     <td style={{ padding: "10px 12px" }}>{getStatusBadge(item.status, item.feedback_type)}</td>
 
                     <td style={{ padding: "10px 12px" }}>
-                      <span style={{ fontSize: 12, color: "#5c7080" }}>
+                      <span style={{ fontSize: 12, color: "var(--fb-text-secondary)" }}>
                         {formatDate(item.created_at)}
                       </span>
                     </td>
@@ -486,7 +486,7 @@ const RecentFeedbackActivity = ({
                           gap: 4,
                           padding: "4px 10px",
                           borderRadius: 8,
-                          backgroundColor: "#106BA3",
+                          backgroundColor: "var(--fb-primary)",
                           color: "#ffffff",
                           fontSize: 11,
                           fontWeight: 600,

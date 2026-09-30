@@ -50,7 +50,7 @@ const ResolutionStatusChart = ({
     accumulatedAngle += dashLength;
     const config = STATUS_CONFIG[item.status] || {
       label: item.status,
-      color: "#106BA3",
+      color: "var(--fb-primary)",
       bgColor: "rgba(16, 107, 163, 0.1)",
     };
 
@@ -71,8 +71,8 @@ const ResolutionStatusChart = ({
       style={{
         padding: 20,
         borderRadius: 16,
-        backgroundColor: "#ffffff",
-        border: "1px solid #e2e8f0",
+        backgroundColor: "var(--fb-bg-paper)",
+        border: "1px solid var(--fb-border)",
         boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
         height: "100%",
         display: "flex",
@@ -96,7 +96,7 @@ const ResolutionStatusChart = ({
               height: 34,
               borderRadius: 10,
               backgroundColor: "rgba(16, 107, 163, 0.1)",
-              color: "#106BA3",
+              color: "var(--fb-primary)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -105,11 +105,11 @@ const ResolutionStatusChart = ({
           >
             <PieChart style={{ width: 18, height: 18 }} />
           </div>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: "#0f1c2e", margin: 0 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--fb-text-primary)", margin: 0 }}>
             Feedback Resolution Status
           </h3>
         </div>
-        <span style={{ fontSize: 12, fontWeight: 600, color: "#5c7080" }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fb-text-secondary)" }}>
           {total} Total Issues
         </span>
       </div>
@@ -140,17 +140,17 @@ const ResolutionStatusChart = ({
                 width: 140,
                 height: 140,
                 borderRadius: "50%",
-                backgroundColor: "#e2e8f0",
+                backgroundColor: "var(--fb-border)",
               }}
             />
             <div style={{ width: 140, display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ height: 28, backgroundColor: "#e2e8f0", borderRadius: 8 }} />
-              <div style={{ height: 28, backgroundColor: "#e2e8f0", borderRadius: 8 }} />
-              <div style={{ height: 28, backgroundColor: "#e2e8f0", borderRadius: 8 }} />
+              <div style={{ height: 28, backgroundColor: "var(--fb-border)", borderRadius: 8 }} />
+              <div style={{ height: 28, backgroundColor: "var(--fb-border)", borderRadius: 8 }} />
+              <div style={{ height: 28, backgroundColor: "var(--fb-border)", borderRadius: 8 }} />
             </div>
           </div>
         ) : total === 0 ? (
-          <div style={{ textAlign: "center", padding: "32px 0", color: "#5c7080", fontSize: 12 }}>
+          <div style={{ textAlign: "center", padding: "32px 0", color: "var(--fb-text-secondary)", fontSize: 12 }}>
             No feedback resolution data available.
           </div>
         ) : (
@@ -164,7 +164,7 @@ const ResolutionStatusChart = ({
                   cy={size / 2}
                   r={radius}
                   fill="transparent"
-                  stroke="#f1f5f9"
+                  stroke="var(--fb-bg-default)"
                   strokeWidth={strokeWidth}
                 />
 
@@ -207,12 +207,12 @@ const ResolutionStatusChart = ({
                   pointerEvents: "none",
                 }}
               >
-                <span style={{ fontSize: 22, fontWeight: 800, color: "#0f1c2e", lineHeight: 1 }}>
+                <span style={{ fontSize: 22, fontWeight: 800, color: "var(--fb-text-primary)", lineHeight: 1 }}>
                   {hoveredStatus
                     ? segments.find((s) => s.status === hoveredStatus)?.count || total
                     : total}
                 </span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: "#5c7080", marginTop: 4 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--fb-text-secondary)", marginTop: 4 }}>
                   {hoveredStatus
                     ? STATUS_CONFIG[hoveredStatus]?.label || "Issues"
                     : "Total"}
@@ -251,8 +251,8 @@ const ResolutionStatusChart = ({
                       justifyContent: "space-between",
                       padding: "8px 12px",
                       borderRadius: 12,
-                      border: isHovered ? `1px solid ${seg.config.color}` : "1px solid #e2e8f0",
-                      backgroundColor: isHovered ? seg.config.bgColor : "#f8fafc",
+                      border: isHovered ? `1px solid ${seg.config.color}` : "1px solid var(--fb-border)",
+                      backgroundColor: isHovered ? seg.config.bgColor : "var(--fb-bg-default)",
                       cursor: isClickable ? "pointer" : "default",
                       width: "100%",
                       boxSizing: "border-box",
@@ -271,20 +271,20 @@ const ResolutionStatusChart = ({
                         }}
                       />
                       <div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "#0f1c2e" }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--fb-text-primary)" }}>
                           {seg.config.label}
                         </div>
-                        <div style={{ fontSize: 10, color: "#5c7080" }}>
+                        <div style={{ fontSize: 10, color: "var(--fb-text-secondary)" }}>
                           {seg.config.actionText}
                         </div>
                       </div>
                     </div>
 
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: "#0f1c2e" }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--fb-text-primary)" }}>
                         {seg.count}
                       </span>
-                      <span style={{ fontSize: 11, color: "#5c7080", minWidth: 36, textAlign: "right" }}>
+                      <span style={{ fontSize: 11, color: "var(--fb-text-secondary)", minWidth: 36, textAlign: "right" }}>
                         ({seg.percentage}%)
                       </span>
                       {isClickable && (

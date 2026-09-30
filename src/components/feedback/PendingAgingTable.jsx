@@ -14,8 +14,8 @@ const PendingAgingTable = ({
       style={{
         padding: 20,
         borderRadius: 16,
-        backgroundColor: "#ffffff",
-        border: "1px solid #e2e8f0",
+        backgroundColor: "var(--fb-bg-paper)",
+        border: "1px solid var(--fb-border)",
         boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
         height: "100%",
         display: "flex",
@@ -39,7 +39,7 @@ const PendingAgingTable = ({
               height: 34,
               borderRadius: 10,
               backgroundColor: "rgba(217, 119, 6, 0.1)",
-              color: "#d97706",
+              color: "var(--fb-warning)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -48,11 +48,11 @@ const PendingAgingTable = ({
           >
             <Clock style={{ width: 18, height: 18 }} />
           </div>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: "#0f1c2e", margin: 0 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--fb-text-primary)", margin: 0 }}>
             Pending Issue — Aging
           </h3>
         </div>
-        <span style={{ fontSize: 12, fontWeight: 600, color: "#5c7080" }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fb-text-secondary)" }}>
           {totalPending} total pending
         </span>
       </div>
@@ -61,12 +61,12 @@ const PendingAgingTable = ({
       <div style={{ flex: 1, overflowX: "auto" }}>
         {loading ? (
           <div style={{ padding: "8px 0", display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ height: 36, backgroundColor: "#e2e8f0", borderRadius: 8, width: "100%" }} />
-            <div style={{ height: 36, backgroundColor: "#e2e8f0", borderRadius: 8, width: "100%" }} />
-            <div style={{ height: 36, backgroundColor: "#e2e8f0", borderRadius: 8, width: "100%" }} />
+            <div style={{ height: 36, backgroundColor: "var(--fb-border)", borderRadius: 8, width: "100%" }} />
+            <div style={{ height: 36, backgroundColor: "var(--fb-border)", borderRadius: 8, width: "100%" }} />
+            <div style={{ height: 36, backgroundColor: "var(--fb-border)", borderRadius: 8, width: "100%" }} />
           </div>
         ) : agingData.length === 0 || totalPending === 0 ? (
-          <div style={{ textAlign: "center", padding: "32px 0", color: "#5c7080", fontSize: 12 }}>
+          <div style={{ textAlign: "center", padding: "32px 0", color: "var(--fb-text-secondary)", fontSize: 12 }}>
             No pending issues in queue. All clear! 🎉
           </div>
         ) : (
@@ -75,7 +75,7 @@ const PendingAgingTable = ({
             style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}
           >
             <thead>
-              <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
+              <tr style={{ borderBottom: "1px solid var(--fb-border)" }}>
                 <th
                   style={{
                     padding: "10px 12px",
@@ -83,8 +83,8 @@ const PendingAgingTable = ({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    color: "#5c7080",
-                    backgroundColor: "#f8fafc",
+                    color: "var(--fb-text-secondary)",
+                    backgroundColor: "var(--fb-bg-default)",
                   }}
                 >
                   Age Bracket
@@ -96,8 +96,8 @@ const PendingAgingTable = ({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    color: "#5c7080",
-                    backgroundColor: "#f8fafc",
+                    color: "var(--fb-text-secondary)",
+                    backgroundColor: "var(--fb-bg-default)",
                     textAlign: "center",
                   }}
                 >
@@ -110,8 +110,8 @@ const PendingAgingTable = ({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    color: "#5c7080",
-                    backgroundColor: "#f8fafc",
+                    color: "var(--fb-text-secondary)",
+                    backgroundColor: "var(--fb-bg-default)",
                     textAlign: "right",
                   }}
                 >
@@ -129,7 +129,7 @@ const PendingAgingTable = ({
                     key={row.bucket}
                     onClick={() => onAgingBucketClick && onAgingBucketClick(row.bucket)}
                     style={{
-                      borderBottom: "1px solid #e2e8f0",
+                      borderBottom: "1px solid var(--fb-border)",
                       cursor: "pointer",
                       backgroundColor: isOldest && hasIssues ? "rgba(245, 158, 11, 0.08)" : "transparent",
                       transition: "background-color 0.2s ease",
@@ -138,13 +138,13 @@ const PendingAgingTable = ({
                     <td style={{ padding: "10px 12px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         {isOldest && hasIssues && (
-                          <AlertTriangle style={{ width: 14, height: 14, color: "#d97706", flexShrink: 0 }} />
+                          <AlertTriangle style={{ width: 14, height: 14, color: "var(--fb-warning)", flexShrink: 0 }} />
                         )}
                         <span
                           style={{
                             fontSize: 12,
                             fontWeight: isOldest ? 700 : 600,
-                            color: isOldest && hasIssues ? "#d97706" : "#0f1c2e",
+                            color: isOldest && hasIssues ? "var(--fb-warning)" : "var(--fb-text-primary)",
                           }}
                         >
                           {row.bucket}
@@ -167,13 +167,13 @@ const PendingAgingTable = ({
                               ? "rgba(245, 158, 11, 0.2)"
                               : hasIssues
                               ? "rgba(16, 107, 163, 0.12)"
-                              : "#f1f5f9",
+                              : "var(--fb-bg-default)",
                           color:
                             isOldest && hasIssues
                               ? "#b45309"
                               : hasIssues
-                              ? "#106BA3"
-                              : "#5c7080",
+                              ? "var(--fb-primary)"
+                              : "var(--fb-text-secondary)",
                         }}
                       >
                         {row.count}
@@ -191,14 +191,14 @@ const PendingAgingTable = ({
                             fontSize: 11,
                             fontWeight: 600,
                             border: "1px solid #f59e0b",
-                            color: "#d97706",
+                            color: "var(--fb-warning)",
                             backgroundColor: "rgba(245, 158, 11, 0.1)",
                           }}
                         >
                           Requires Attention
                         </span>
                       ) : hasIssues ? (
-                        <span style={{ fontSize: 12, color: "#5c7080", fontWeight: 500 }}>
+                        <span style={{ fontSize: 12, color: "var(--fb-text-secondary)", fontWeight: 500 }}>
                           Normal Queue
                         </span>
                       ) : (

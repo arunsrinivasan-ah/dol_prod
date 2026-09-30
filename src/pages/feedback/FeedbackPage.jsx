@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { X } from "lucide-react";
 
-import FeedbackHeader from "../../components/feedback/FeedbackHeader";
-import FeedbackSidebar from "../../components/feedback/FeedbackSidebar";
 import FeedbackDashboard from "../../components/feedback/FeedbackDashboard";
 import PendingFeedbackList from "../../components/feedback/PendingFeedbackList";
 import PendingDetailView from "../../components/feedback/PendingDetailView";
@@ -16,11 +14,16 @@ import {
   fetchApprovedFeedback,
   fetchFeedbackDetail,
 } from "../../api/feedbackApi";
-import { isFeedbackAuthorized, getCurrentUserEmail } from "../../utils/feedbackAuth";
+import { isFeedbackAuthorized, getCurrentUserEmail, getCurrentUserRole } from "../../utils/feedbackAuth";
 
-const FeedbackPage = ({ onNavigateToChat, userProfile, onLogout }) => {
+const FeedbackPage = ({ userProfile }) => {
   const navigate = useNavigate();
-  const isAuthorized = isFeedbackAuthorized(userProfile?.email || getCurrentUserEmail());
+  const location = useLocation();
+  const basePath = location.pathname.startsWith("/admin/") ? "/admin/feedback" : "/feedback";
+  const [section, detailId] = location.pathname.slice(basePath.length).split("/").filter(Boolean);
+  const activeTab = section === "pending" ? 1 : section === "approved" ? 2 : 0;
+  const selectedId = activeTab > 0 ? detailId : null;
+  const isAuthorized = isFeedbackAuthorized(userProfile?.email || getCurrentUserEmail(), getCurrentUserRole());
 
   useEffect(() => {
     if (!isAuthorized) {
@@ -28,13 +31,6 @@ const FeedbackPage = ({ onNavigateToChat, userProfile, onLogout }) => {
     }
   }, [isAuthorized, navigate]);
 
-  const handleNavChat = onNavigateToChat || (() => navigate("/"));
-
-  // Tab state: 0 -> Dashboard, 1 -> Pending, 2 -> Approved
-  const [activeTab, setActiveTab] = useState(0);
-
-  // Subview selection
-  const [selectedId, setSelectedId] = useState(null);
   const [selectedDetail, setSelectedDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -118,62 +114,42 @@ const FeedbackPage = ({ onNavigateToChat, userProfile, onLogout }) => {
     }
   }, [userProfile?.company_id, approvedSearch, approvedPage, approvedRowsPerPage]);
 
-  const handleSelectItem = useCallback(async (feedbackId, statusHint = null) => {
-    try {
-      setSelectedId(feedbackId);
-      setDetailLoading(true);
+  const handleSelectItem = (feedbackId, statusHint = null) => {
+    const target = statusHint === "approved" || (statusHint !== "pending" && activeTab === 2)
+      ? "approved" : "pending";
+    navigate(`${basePath}/${target}/${encodeURIComponent(feedbackId)}`);
+  };
 
-      const isApproved = statusHint === "approved" || activeTab === 2;
-      const targetTab = isApproved ? 2 : 1;
-      setActiveTab(targetTab);
-
-      const prefix = isApproved ? "/feedback/approved/" : "/feedback/pending/";
-      window.history.pushState(null, "", `${prefix}${feedbackId}`);
-
-      const detail = await fetchFeedbackDetail(feedbackId);
-      setSelectedDetail(detail);
-    } catch (err) {
-      console.error("Failed to load feedback detail:", err);
-      setToast({
-        open: true,
-        message: "Failed to load feedback details.",
-        severity: "error",
-      });
-    } finally {
-      setDetailLoading(false);
-    }
-  }, [activeTab]);
-
-  // Initial load and URL parsing
   useEffect(() => {
-    loadStats();
-    const path = window.location.pathname;
+    if (isAuthorized) loadStats();
+  }, [isAuthorized, loadStats]);
 
-    if (path.includes("/feedback/approved")) {
-      setActiveTab(2);
-      const match = path.match(/\/feedback\/approved\/([^/?#]+)/);
-      if (match && match[1]) {
-        handleSelectItem(match[1], "approved");
-      }
-    } else if (path.includes("/feedback/pending")) {
-      setActiveTab(1);
-      const match = path.match(/\/feedback\/pending\/([^/?#]+)/);
-      if (match && match[1]) {
-        handleSelectItem(match[1], "pending");
-      }
-    } else {
-      setActiveTab(0);
+  useEffect(() => {
+    let cancelled = false;
+    setSelectedDetail(null);
+    if (!isAuthorized || !selectedId) {
+      setDetailLoading(false);
+      return;
     }
-  }, [loadStats, handleSelectItem]);
+    setDetailLoading(true);
+    fetchFeedbackDetail(decodeURIComponent(selectedId))
+      .then((detail) => { if (!cancelled) setSelectedDetail(detail); })
+      .catch(() => {
+        if (!cancelled) setToast({ open: true, message: "Failed to load feedback details.", severity: "error" });
+      })
+      .finally(() => { if (!cancelled) setDetailLoading(false); });
+    return () => { cancelled = true; };
+  }, [isAuthorized, selectedId, activeTab]);
 
   // Reload lists when tabs/search change
   useEffect(() => {
+    if (!isAuthorized) return;
     if (activeTab === 1) {
       loadPending();
     } else if (activeTab === 2) {
       loadApproved();
     }
-  }, [activeTab, loadPending, loadApproved]);
+  }, [isAuthorized, activeTab, loadPending, loadApproved]);
 
   // Dismiss toast after 4.5s
   useEffect(() => {
@@ -186,24 +162,13 @@ const FeedbackPage = ({ onNavigateToChat, userProfile, onLogout }) => {
   }, [toast.open]);
 
   const handleTabChange = (newIndex, newPath = null) => {
-    setActiveTab(newIndex);
-    setSelectedId(null);
-    setSelectedDetail(null);
-
-    let targetPath = newPath;
-    if (!targetPath) {
-      if (newIndex === 0) targetPath = "/feedback/dashboard";
-      else if (newIndex === 1) targetPath = "/feedback/pending";
-      else if (newIndex === 2) targetPath = "/feedback/approved";
-    }
-    window.history.pushState(null, "", targetPath);
+    const section = ["dashboard", "pending", "approved"][newIndex] || "dashboard";
+    const query = newPath?.includes("?") ? newPath.slice(newPath.indexOf("?")) : "";
+    navigate(`${basePath}/${section}${query}`);
   };
 
   const handleBackToList = () => {
-    setSelectedId(null);
-    setSelectedDetail(null);
-    const basePath = activeTab === 2 ? "/feedback/approved" : "/feedback/pending";
-    window.history.pushState(null, "", basePath);
+    navigate(`${basePath}/${activeTab === 2 ? "approved" : "pending"}`);
   };
 
   const handleActionComplete = (action, feedbackId) => {
@@ -225,7 +190,9 @@ const FeedbackPage = ({ onNavigateToChat, userProfile, onLogout }) => {
         message: `Approved feedback updated and re-indexed in vector memory.`,
         severity: "success",
       });
-      handleSelectItem(feedbackId, "approved");
+      fetchFeedbackDetail(feedbackId).then(setSelectedDetail).catch(() => {
+        setToast({ open: true, message: "Unable to refresh feedback details.", severity: "error" });
+      });
     } else if (action === "deleted") {
       handleBackToList();
       setToast({
@@ -250,26 +217,9 @@ const FeedbackPage = ({ onNavigateToChat, userProfile, onLogout }) => {
   }
 
   return (
-    <div className="fb-page-container" style={{ width: "100vw", height: "100vh", minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: "#f8fafc", overflow: "hidden" }}>
-      {/* 1. Header */}
-      <FeedbackHeader
-        onNavigateToChat={handleNavChat}
-        userProfile={userProfile}
-        onLogout={onLogout}
-      />
-
-      {/* 2. Main Content Container */}
-      <div className="fb-main-body" style={{ flex: 1, overflowY: "auto", padding: "24px", boxSizing: "border-box" }}>
-        <div className="fb-content-wrapper" style={{ maxWidth: 1400, margin: "0 auto", display: "flex", flexDirection: "row", gap: 24, alignItems: "flex-start", width: "100%", boxSizing: "border-box" }}>
-          {/* Left Feedback Navigation Sidebar (Dashboard, Pending, Approved) */}
-          {!selectedId && (
-            <FeedbackSidebar
-              activeTab={activeTab}
-              onTabChange={handleTabChange}
-              stats={stats}
-            />
-          )}
-
+    <div className="fb-page-container">
+      <div className="fb-main-body" style={{ flex: 1, padding: "24px", boxSizing: "border-box" }}>
+        <div className="fb-content-wrapper" style={{ maxWidth: 1400, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
           {/* Right Main Content Area */}
           <div className="fb-main-area" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 20, width: "100%", boxSizing: "border-box" }}>
             {activeTab === 0 ? (

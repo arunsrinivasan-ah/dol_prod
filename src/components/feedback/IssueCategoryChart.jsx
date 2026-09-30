@@ -2,7 +2,7 @@ import React from "react";
 import { Layers, ChevronRight } from "lucide-react";
 
 const CATEGORY_COLORS = {
-  incorrect_information: "#dc2626", // Red
+  incorrect_information: "var(--fb-danger)", // Red
   did_not_answer_question: "#ea580c", // Dark Orange
   irrelevant_answer: "#f97316", // Orange
   incomplete_answer: "#0284c7", // Sky Blue
@@ -24,8 +24,8 @@ const IssueCategoryChart = ({
       style={{
         padding: 20,
         borderRadius: 16,
-        backgroundColor: "#ffffff",
-        border: "1px solid #e2e8f0",
+        backgroundColor: "var(--fb-bg-paper)",
+        border: "1px solid var(--fb-border)",
         boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
         height: "100%",
         display: "flex",
@@ -49,7 +49,7 @@ const IssueCategoryChart = ({
               height: 34,
               borderRadius: 10,
               backgroundColor: "rgba(16, 107, 163, 0.1)",
-              color: "#106BA3",
+              color: "var(--fb-primary)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -58,11 +58,11 @@ const IssueCategoryChart = ({
           >
             <Layers style={{ width: 18, height: 18 }} />
           </div>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: "#0f1c2e", margin: 0 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--fb-text-primary)", margin: 0 }}>
             Issue Category Breakdown
           </h3>
         </div>
-        <span style={{ fontSize: 12, fontWeight: 600, color: "#5c7080" }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fb-text-secondary)" }}>
           {totalNegativeCount} total issues
         </span>
       </div>
@@ -84,7 +84,7 @@ const IssueCategoryChart = ({
                 style={{
                   height: 14,
                   width: "35%",
-                  backgroundColor: "#e2e8f0",
+                  backgroundColor: "var(--fb-border)",
                   borderRadius: 6,
                   marginBottom: 6,
                 }}
@@ -93,20 +93,20 @@ const IssueCategoryChart = ({
                 style={{
                   height: 8,
                   width: "100%",
-                  backgroundColor: "#f1f5f9",
+                  backgroundColor: "var(--fb-bg-default)",
                   borderRadius: 9999,
                 }}
               />
             </div>
           ))
         ) : categories.length === 0 || totalNegativeCount === 0 ? (
-          <div style={{ textAlign: "center", padding: "24px 0", color: "#5c7080", fontSize: 12 }}>
+          <div style={{ textAlign: "center", padding: "24px 0", color: "var(--fb-text-secondary)", fontSize: 12 }}>
             No issue category data available.
           </div>
         ) : (
           categories.map((cat) => {
             const barPct = ((cat.count || 0) / maxCount) * 100;
-            const barColor = CATEGORY_COLORS[cat.id] || "#106BA3";
+            const barColor = CATEGORY_COLORS[cat.id] || "var(--fb-primary)";
 
             return (
               <button
@@ -120,8 +120,8 @@ const IssueCategoryChart = ({
                   flexDirection: "column",
                   padding: "10px 12px",
                   borderRadius: 12,
-                  border: "1px solid #f1f5f9",
-                  backgroundColor: "#fcfcfd",
+                  border: "1px solid var(--fb-bg-default)",
+                  backgroundColor: "var(--fb-bg-default)",
                   cursor: "pointer",
                   boxSizing: "border-box",
                   textAlign: "left",
@@ -132,8 +132,8 @@ const IssueCategoryChart = ({
                   e.currentTarget.style.borderColor = "#cbd5e1";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "#fcfcfd";
-                  e.currentTarget.style.borderColor = "#f1f5f9";
+                  e.currentTarget.style.backgroundColor = "var(--fb-bg-default)";
+                  e.currentTarget.style.borderColor = "var(--fb-bg-default)";
                 }}
               >
                 <div
@@ -154,15 +154,15 @@ const IssueCategoryChart = ({
                         flexShrink: 0,
                       }}
                     />
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "#0f1c2e" }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fb-text-primary)" }}>
                       {cat.label}
                     </span>
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-                    <span style={{ fontWeight: 700, color: "#0f1c2e" }}>{cat.count}</span>
-                    <span style={{ color: "#5c7080" }}>({cat.percentage}%)</span>
-                    <ChevronRight style={{ width: 14, height: 14, color: "#5c7080" }} />
+                    <span style={{ fontWeight: 700, color: "var(--fb-text-primary)" }}>{cat.count}</span>
+                    <span style={{ color: "var(--fb-text-secondary)" }}>({cat.percentage}%)</span>
+                    <ChevronRight style={{ width: 14, height: 14, color: "var(--fb-text-secondary)" }} />
                   </div>
                 </div>
 
@@ -172,7 +172,7 @@ const IssueCategoryChart = ({
                     width: "100%",
                     height: 6,
                     borderRadius: 9999,
-                    backgroundColor: "#e2e8f0",
+                    backgroundColor: "var(--fb-border)",
                     overflow: "hidden",
                   }}
                 >

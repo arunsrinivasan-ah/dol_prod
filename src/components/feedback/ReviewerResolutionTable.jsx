@@ -11,8 +11,8 @@ const ReviewerResolutionTable = ({
       style={{
         padding: 20,
         borderRadius: 16,
-        backgroundColor: "#ffffff",
-        border: "1px solid #e2e8f0",
+        backgroundColor: "var(--fb-bg-paper)",
+        border: "1px solid var(--fb-border)",
         boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
         height: "100%",
         display: "flex",
@@ -36,7 +36,7 @@ const ReviewerResolutionTable = ({
               height: 34,
               borderRadius: 10,
               backgroundColor: "rgba(16, 107, 163, 0.1)",
-              color: "#106BA3",
+              color: "var(--fb-primary)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -45,11 +45,11 @@ const ReviewerResolutionTable = ({
           >
             <Users style={{ width: 18, height: 18 }} />
           </div>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: "#0f1c2e", margin: 0 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--fb-text-primary)", margin: 0 }}>
             Total Issues Resolved by SMEs
           </h3>
         </div>
-        <span style={{ fontSize: 12, fontWeight: 600, color: "#5c7080" }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fb-text-secondary)" }}>
           {reviewerData.length} active reviewers
         </span>
       </div>
@@ -58,12 +58,12 @@ const ReviewerResolutionTable = ({
       <div style={{ flex: 1, overflowX: "auto" }}>
         {loading ? (
           <div style={{ padding: "8px 0", display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ height: 36, backgroundColor: "#e2e8f0", borderRadius: 8, width: "100%" }} />
-            <div style={{ height: 36, backgroundColor: "#e2e8f0", borderRadius: 8, width: "100%" }} />
-            <div style={{ height: 36, backgroundColor: "#e2e8f0", borderRadius: 8, width: "100%" }} />
+            <div style={{ height: 36, backgroundColor: "var(--fb-border)", borderRadius: 8, width: "100%" }} />
+            <div style={{ height: 36, backgroundColor: "var(--fb-border)", borderRadius: 8, width: "100%" }} />
+            <div style={{ height: 36, backgroundColor: "var(--fb-border)", borderRadius: 8, width: "100%" }} />
           </div>
         ) : reviewerData.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "32px 0", color: "#5c7080", fontSize: 12 }}>
+          <div style={{ textAlign: "center", padding: "32px 0", color: "var(--fb-text-secondary)", fontSize: 12 }}>
             No reviewer resolution records found for this period.
           </div>
         ) : (
@@ -72,7 +72,7 @@ const ReviewerResolutionTable = ({
             style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}
           >
             <thead>
-              <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
+              <tr style={{ borderBottom: "1px solid var(--fb-border)" }}>
                 <th
                   style={{
                     padding: "10px 12px",
@@ -80,8 +80,8 @@ const ReviewerResolutionTable = ({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    color: "#5c7080",
-                    backgroundColor: "#f8fafc",
+                    color: "var(--fb-text-secondary)",
+                    backgroundColor: "var(--fb-bg-default)",
                   }}
                 >
                   Reviewer
@@ -93,8 +93,8 @@ const ReviewerResolutionTable = ({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    color: "#5c7080",
-                    backgroundColor: "#f8fafc",
+                    color: "var(--fb-text-secondary)",
+                    backgroundColor: "var(--fb-bg-default)",
                     textAlign: "center",
                   }}
                 >
@@ -107,8 +107,8 @@ const ReviewerResolutionTable = ({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    color: "#5c7080",
-                    backgroundColor: "#f8fafc",
+                    color: "var(--fb-text-secondary)",
+                    backgroundColor: "var(--fb-bg-default)",
                     textAlign: "center",
                   }}
                 >
@@ -121,8 +121,8 @@ const ReviewerResolutionTable = ({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    color: "#5c7080",
-                    backgroundColor: "#f8fafc",
+                    color: "var(--fb-text-secondary)",
+                    backgroundColor: "var(--fb-bg-default)",
                     textAlign: "right",
                   }}
                 >
@@ -134,7 +134,7 @@ const ReviewerResolutionTable = ({
               {reviewerData.map((row, idx) => (
                 <tr
                   key={row.reviewer || idx}
-                  style={{ borderBottom: "1px solid #e2e8f0" }}
+                  style={{ borderBottom: "1px solid var(--fb-border)" }}
                 >
                   <td style={{ padding: "10px 12px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -143,7 +143,7 @@ const ReviewerResolutionTable = ({
                           width: 28,
                           height: 28,
                           borderRadius: "50%",
-                          backgroundColor: "#106BA3",
+                          backgroundColor: "var(--fb-primary)",
                           color: "#ffffff",
                           display: "flex",
                           alignItems: "center",
@@ -155,7 +155,7 @@ const ReviewerResolutionTable = ({
                       >
                         {row.reviewer ? row.reviewer.charAt(0).toUpperCase() : "U"}
                       </div>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "#0f1c2e" }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fb-text-primary)" }}>
                         {row.reviewer || "Unknown Reviewer"}
                       </span>
                     </div>
@@ -171,7 +171,7 @@ const ReviewerResolutionTable = ({
                         fontSize: 12,
                         fontWeight: 700,
                         backgroundColor: "rgba(22, 163, 74, 0.12)",
-                        color: "#16a34a",
+                        color: "var(--fb-success)",
                       }}
                     >
                       {row.approved}
@@ -199,7 +199,7 @@ const ReviewerResolutionTable = ({
                       padding: "10px 12px",
                       textAlign: "right",
                       fontWeight: 800,
-                      color: "#106BA3",
+                      color: "var(--fb-primary)",
                       fontSize: 13,
                     }}
                   >

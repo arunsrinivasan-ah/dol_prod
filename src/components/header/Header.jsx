@@ -572,9 +572,10 @@ const Header = ({
               )}
             </Box>
 
-            <Divider sx={{ my: 3 }} />
 
             {(userData.user_role === "ADMIN" || userData.user_role === "SUPER_ADMIN") && (
+              <>
+              <Divider sx={{ my: 3 }} />
               <Button
                 fullWidth
                 variant="outlined"
@@ -583,27 +584,14 @@ const Header = ({
                 onClick={() => {
                   setAnchorElFont(null);
                   setSettingsView("general");
-                  navigate('/admin/chat-history');
+                  navigate('/admin/feedback');
                 }}
               >
                 Admin Page
               </Button>
+              </>
             )}
 
-            <Button
-              fullWidth
-              variant="outlined"
-              color="error"
-              startIcon={<LogoutOutlinedIcon />}
-              onClick={() => {
-                setAnchorElFont(null);
-                setSettingsView("general");
-                handleLogoutClick();
-              }}
-              sx={{ borderRadius: 2, textTransform: "none" }}
-            >
-              Logout from account
-            </Button>
           </>
         )}
       </Popover>

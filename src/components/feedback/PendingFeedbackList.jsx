@@ -14,7 +14,7 @@ const getFeedbackTypeChip = (type) => {
             fontSize: 11,
             fontWeight: 600,
             backgroundColor: "rgba(22, 163, 74, 0.12)",
-            color: "#16a34a",
+            color: "var(--fb-success)",
           }}
         >
           Positive 👍
@@ -31,7 +31,7 @@ const getFeedbackTypeChip = (type) => {
             fontSize: 11,
             fontWeight: 600,
             border: "1px solid rgba(220, 38, 38, 0.3)",
-            color: "#dc2626",
+            color: "var(--fb-danger)",
             backgroundColor: "rgba(220, 38, 38, 0.1)",
           }}
         >
@@ -49,7 +49,7 @@ const getFeedbackTypeChip = (type) => {
             fontSize: 11,
             fontWeight: 600,
             border: "1px solid rgba(217, 119, 6, 0.3)",
-            color: "#d97706",
+            color: "var(--fb-warning)",
             backgroundColor: "rgba(217, 119, 6, 0.1)",
           }}
         >
@@ -120,8 +120,8 @@ const getFeedbackTypeChip = (type) => {
             borderRadius: 9999,
             fontSize: 11,
             fontWeight: 600,
-            border: "1px solid #e2e8f0",
-            color: "#5c7080",
+            border: "1px solid var(--fb-border)",
+            color: "var(--fb-text-secondary)",
           }}
         >
           {type || "Feedback"}
@@ -192,7 +192,7 @@ const PendingFeedbackList = ({
               left: 12,
               top: "50%",
               transform: "translateY(-50%)",
-              color: "#5c7080",
+              color: "var(--fb-text-secondary)",
             }}
           />
           <input
@@ -208,9 +208,9 @@ const PendingFeedbackList = ({
               paddingBottom: 8,
               fontSize: 12,
               borderRadius: 12,
-              backgroundColor: "#ffffff",
-              border: "1px solid #e2e8f0",
-              color: "#0f1c2e",
+              backgroundColor: "var(--fb-bg-paper)",
+              border: "1px solid var(--fb-border)",
+              color: "var(--fb-text-primary)",
               boxSizing: "border-box",
               outline: "none",
             }}
@@ -225,9 +225,9 @@ const PendingFeedbackList = ({
             style={{
               padding: "8px 12px",
               borderRadius: 12,
-              backgroundColor: "#ffffff",
-              border: "1px solid #e2e8f0",
-              color: "#5c7080",
+              backgroundColor: "var(--fb-bg-paper)",
+              border: "1px solid var(--fb-border)",
+              color: "var(--fb-text-secondary)",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
@@ -245,8 +245,8 @@ const PendingFeedbackList = ({
         style={{
           padding: 0,
           borderRadius: 16,
-          backgroundColor: "#ffffff",
-          border: "1px solid #e2e8f0",
+          backgroundColor: "var(--fb-bg-paper)",
+          border: "1px solid var(--fb-border)",
           boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
           overflow: "hidden",
           flex: 1,
@@ -262,10 +262,10 @@ const PendingFeedbackList = ({
               justifyContent: "center",
               flex: 1,
               padding: "64px 0",
-              color: "#5c7080",
+              color: "var(--fb-text-secondary)",
             }}
           >
-            <RefreshCw style={{ width: 28, height: 28, animation: "spin 1s linear infinite", color: "#106BA3" }} />
+            <RefreshCw style={{ width: 28, height: 28, animation: "spin 1s linear infinite", color: "var(--fb-primary)" }} />
           </div>
         ) : itemList.length === 0 ? (
           <div
@@ -276,12 +276,12 @@ const PendingFeedbackList = ({
               justifyContent: "center",
               flex: 1,
               padding: "64px 16px",
-              color: "#5c7080",
+              color: "var(--fb-text-secondary)",
               textAlign: "center",
             }}
           >
             <Inbox style={{ width: 44, height: 44, marginBottom: 12, opacity: 0.4 }} />
-            <h4 style={{ fontSize: 16, fontWeight: 700, color: "#0f1c2e", margin: "0 0 4px 0" }}>
+            <h4 style={{ fontSize: 16, fontWeight: 700, color: "var(--fb-text-primary)", margin: "0 0 4px 0" }}>
               No Pending Feedback
             </h4>
             <p style={{ fontSize: 12, maxWidth: 360, margin: 0 }}>
@@ -295,26 +295,26 @@ const PendingFeedbackList = ({
               style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}
             >
               <thead>
-                <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                  <th style={{ padding: "12px 16px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#5c7080", backgroundColor: "#f8fafc", width: 110 }}>
+                <tr style={{ borderBottom: "1px solid var(--fb-border)" }}>
+                  <th style={{ padding: "12px 16px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--fb-text-secondary)", backgroundColor: "var(--fb-bg-default)", width: 110 }}>
                     Feedback ID
                   </th>
-                  <th style={{ padding: "12px 16px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#5c7080", backgroundColor: "#f8fafc", minWidth: 240 }}>
+                  <th style={{ padding: "12px 16px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--fb-text-secondary)", backgroundColor: "var(--fb-bg-default)", minWidth: 240 }}>
                     Question
                   </th>
-                  <th style={{ padding: "12px 16px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#5c7080", backgroundColor: "#f8fafc", width: 150 }}>
+                  <th style={{ padding: "12px 16px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--fb-text-secondary)", backgroundColor: "var(--fb-bg-default)", width: 150 }}>
                     Feedback Type
                   </th>
-                  <th style={{ padding: "12px 16px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#5c7080", backgroundColor: "#f8fafc", width: 110 }}>
+                  <th style={{ padding: "12px 16px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--fb-text-secondary)", backgroundColor: "var(--fb-bg-default)", width: 110 }}>
                     Company
                   </th>
-                  <th style={{ padding: "12px 16px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#5c7080", backgroundColor: "#f8fafc", width: 120 }}>
+                  <th style={{ padding: "12px 16px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--fb-text-secondary)", backgroundColor: "var(--fb-bg-default)", width: 120 }}>
                     Date
                   </th>
-                  <th style={{ padding: "12px 16px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#5c7080", backgroundColor: "#f8fafc", width: 90 }}>
+                  <th style={{ padding: "12px 16px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--fb-text-secondary)", backgroundColor: "var(--fb-bg-default)", width: 90 }}>
                     Status
                   </th>
-                  <th style={{ padding: "12px 16px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#5c7080", backgroundColor: "#f8fafc", textAlign: "center", width: 90 }}>
+                  <th style={{ padding: "12px 16px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--fb-text-secondary)", backgroundColor: "var(--fb-bg-default)", textAlign: "center", width: 90 }}>
                     Action
                   </th>
                 </tr>
@@ -324,9 +324,9 @@ const PendingFeedbackList = ({
                   <tr
                     key={row.feedback_id}
                     onClick={() => onSelectItem(row.feedback_id)}
-                    style={{ borderBottom: "1px solid #e2e8f0", cursor: "pointer", transition: "background-color 0.2s ease" }}
+                    style={{ borderBottom: "1px solid var(--fb-border)", cursor: "pointer", transition: "background-color 0.2s ease" }}
                   >
-                    <td style={{ padding: "12px 16px", fontFamily: "monospace", fontSize: 12, color: "#5c7080" }}>
+                    <td style={{ padding: "12px 16px", fontFamily: "monospace", fontSize: 12, color: "var(--fb-text-secondary)" }}>
                       {row.feedback_id}
                     </td>
                     <td style={{ padding: "12px 16px" }}>
@@ -334,7 +334,7 @@ const PendingFeedbackList = ({
                         style={{
                           fontWeight: 600,
                           fontSize: 12,
-                          color: "#0f1c2e",
+                          color: "var(--fb-text-primary)",
                           maxWidth: 380,
                           whiteSpace: "nowrap",
                           overflow: "hidden",
@@ -347,7 +347,7 @@ const PendingFeedbackList = ({
                         <div
                           style={{
                             fontSize: 11,
-                            color: "#5c7080",
+                            color: "var(--fb-text-secondary)",
                             fontStyle: "italic",
                             marginTop: 2,
                             whiteSpace: "nowrap",
@@ -361,10 +361,10 @@ const PendingFeedbackList = ({
                       )}
                     </td>
                     <td style={{ padding: "12px 16px" }}>{getFeedbackTypeChip(row.feedback_type)}</td>
-                    <td style={{ padding: "12px 16px", fontSize: 12, color: "#5c7080", fontWeight: 500 }}>
+                    <td style={{ padding: "12px 16px", fontSize: 12, color: "var(--fb-text-secondary)", fontWeight: 500 }}>
                       {row.company_id || "Global"}
                     </td>
-                    <td style={{ padding: "12px 16px", fontSize: 12, color: "#5c7080" }}>
+                    <td style={{ padding: "12px 16px", fontSize: 12, color: "var(--fb-text-secondary)" }}>
                       {formatDate(row.created_at)}
                     </td>
                     <td style={{ padding: "12px 16px" }}>
@@ -377,7 +377,7 @@ const PendingFeedbackList = ({
                           fontSize: 11,
                           fontWeight: 700,
                           backgroundColor: "rgba(217, 119, 6, 0.12)",
-                          color: "#d97706",
+                          color: "var(--fb-warning)",
                         }}
                       >
                         Pending
@@ -396,7 +396,7 @@ const PendingFeedbackList = ({
                           gap: 4,
                           padding: "4px 10px",
                           borderRadius: 8,
-                          backgroundColor: "#106BA3",
+                          backgroundColor: "var(--fb-primary)",
                           color: "#ffffff",
                           fontSize: 11,
                           fontWeight: 600,
@@ -423,9 +423,9 @@ const PendingFeedbackList = ({
             alignItems: "center",
             justifyContent: "space-between",
             padding: "12px 16px",
-            borderTop: "1px solid #e2e8f0",
+            borderTop: "1px solid var(--fb-border)",
             fontSize: 12,
-            color: "#5c7080",
+            color: "var(--fb-text-secondary)",
             flexWrap: "wrap",
             gap: 12,
           }}
@@ -438,10 +438,10 @@ const PendingFeedbackList = ({
               style={{
                 padding: "4px 8px",
                 borderRadius: 8,
-                backgroundColor: "#ffffff",
-                border: "1px solid #e2e8f0",
+                backgroundColor: "var(--fb-bg-paper)",
+                border: "1px solid var(--fb-border)",
                 fontSize: 12,
-                color: "#0f1c2e",
+                color: "var(--fb-text-primary)",
               }}
             >
               {[10, 25, 50, 100].map((num) => (
@@ -464,8 +464,8 @@ const PendingFeedbackList = ({
                 style={{
                   padding: 4,
                   borderRadius: 6,
-                  border: "1px solid #e2e8f0",
-                  backgroundColor: "#ffffff",
+                  border: "1px solid var(--fb-border)",
+                  backgroundColor: "var(--fb-bg-paper)",
                   cursor: page === 0 ? "not-allowed" : "pointer",
                   opacity: page === 0 ? 0.3 : 1,
                   display: "flex",
@@ -481,8 +481,8 @@ const PendingFeedbackList = ({
                 style={{
                   padding: 4,
                   borderRadius: 6,
-                  border: "1px solid #e2e8f0",
-                  backgroundColor: "#ffffff",
+                  border: "1px solid var(--fb-border)",
+                  backgroundColor: "var(--fb-bg-paper)",
                   cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
                   opacity: page >= totalPages - 1 ? 0.3 : 1,
                   display: "flex",

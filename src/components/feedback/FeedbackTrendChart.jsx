@@ -79,8 +79,8 @@ const FeedbackTrendChart = ({
       style={{
         padding: 20,
         borderRadius: 16,
-        backgroundColor: "#ffffff",
-        border: "1px solid #e2e8f0",
+        backgroundColor: "var(--fb-bg-paper)",
+        border: "1px solid var(--fb-border)",
         boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
         marginBottom: 20,
         boxSizing: "border-box",
@@ -105,7 +105,7 @@ const FeedbackTrendChart = ({
               height: 34,
               borderRadius: 10,
               backgroundColor: "rgba(16, 107, 163, 0.1)",
-              color: "#106BA3",
+              color: "var(--fb-primary)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -115,10 +115,10 @@ const FeedbackTrendChart = ({
             <TrendingUp style={{ width: 18, height: 18 }} />
           </div>
           <div>
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: "#0f1c2e", margin: 0 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--fb-text-primary)", margin: 0 }}>
               Feedback Volume & Sentiment Trend
             </h3>
-            <span style={{ fontSize: 11, color: "#5c7080", display: "block", marginTop: 2 }}>
+            <span style={{ fontSize: 11, color: "var(--fb-text-secondary)", display: "block", marginTop: 2 }}>
               Daily trend: Total ratings vs Positive vs Negative ({dateRangeLabel})
             </span>
           </div>
@@ -132,11 +132,11 @@ const FeedbackTrendChart = ({
                 width: 10,
                 height: 10,
                 borderRadius: "50%",
-                backgroundColor: "#106BA3",
+                backgroundColor: "var(--fb-primary)",
                 display: "inline-block",
               }}
             />
-            <span style={{ color: "#5c7080", fontSize: 12, fontWeight: 600 }}>Total</span>
+            <span style={{ color: "var(--fb-text-secondary)", fontSize: 12, fontWeight: 600 }}>Total</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span
@@ -144,11 +144,11 @@ const FeedbackTrendChart = ({
                 width: 10,
                 height: 10,
                 borderRadius: "50%",
-                backgroundColor: "#16a34a",
+                backgroundColor: "var(--fb-success)",
                 display: "inline-block",
               }}
             />
-            <span style={{ color: "#5c7080", fontSize: 12, fontWeight: 600 }}>Positive</span>
+            <span style={{ color: "var(--fb-text-secondary)", fontSize: 12, fontWeight: 600 }}>Positive</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span
@@ -156,11 +156,11 @@ const FeedbackTrendChart = ({
                 width: 10,
                 height: 10,
                 borderRadius: "50%",
-                backgroundColor: "#dc2626",
+                backgroundColor: "var(--fb-danger)",
                 display: "inline-block",
               }}
             />
-            <span style={{ color: "#5c7080", fontSize: 12, fontWeight: 600 }}>Negative</span>
+            <span style={{ color: "var(--fb-text-secondary)", fontSize: 12, fontWeight: 600 }}>Negative</span>
           </div>
         </div>
       </div>
@@ -185,7 +185,7 @@ const FeedbackTrendChart = ({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#5c7080",
+              color: "var(--fb-text-secondary)",
               fontSize: 12,
             }}
           >
@@ -200,7 +200,7 @@ const FeedbackTrendChart = ({
               flexDirection: "column",
               alignItems: "center",
               gap: 8,
-              color: "#dc2626",
+              color: "var(--fb-danger)",
               fontSize: 12,
             }}
           >
@@ -216,7 +216,7 @@ const FeedbackTrendChart = ({
                   padding: "4px 12px",
                   borderRadius: 8,
                   border: "1px solid rgba(220, 38, 38, 0.3)",
-                  color: "#dc2626",
+                  color: "var(--fb-danger)",
                   backgroundColor: "transparent",
                   cursor: "pointer",
                 }}
@@ -227,7 +227,7 @@ const FeedbackTrendChart = ({
             )}
           </div>
         ) : !hasData ? (
-          <div style={{ textAlign: "center", padding: "32px 0", color: "#5c7080", fontSize: 12 }}>
+          <div style={{ textAlign: "center", padding: "32px 0", color: "var(--fb-text-secondary)", fontSize: 12 }}>
             No feedback trend data available for this period.
           </div>
         ) : (
@@ -238,8 +238,8 @@ const FeedbackTrendChart = ({
             >
               <defs>
                 <linearGradient id="totalTrendGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#106BA3" stopOpacity="0.25" />
-                  <stop offset="100%" stopColor="#106BA3" stopOpacity="0.01" />
+                  <stop offset="0%" stopColor="var(--fb-primary)" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="var(--fb-primary)" stopOpacity="0.01" />
                 </linearGradient>
               </defs>
 
@@ -261,7 +261,7 @@ const FeedbackTrendChart = ({
                       y={y + 4}
                       textAnchor="end"
                       fontSize="11"
-                      fill="#5c7080"
+                      fill="var(--fb-text-secondary)"
                       style={{ userSelect: "none" }}
                     >
                       {tickVal}
@@ -277,7 +277,7 @@ const FeedbackTrendChart = ({
               <path
                 d={createPath("total")}
                 fill="none"
-                stroke="#106BA3"
+                stroke="var(--fb-primary)"
                 strokeWidth="2.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -287,7 +287,7 @@ const FeedbackTrendChart = ({
               <path
                 d={createPath("positive")}
                 fill="none"
-                stroke="#16a34a"
+                stroke="var(--fb-success)"
                 strokeWidth="2"
                 strokeDasharray="3 3"
                 strokeLinecap="round"
@@ -298,7 +298,7 @@ const FeedbackTrendChart = ({
               <path
                 d={createPath("negative")}
                 fill="none"
-                stroke="#dc2626"
+                stroke="var(--fb-danger)"
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -325,7 +325,7 @@ const FeedbackTrendChart = ({
                         y1={padding.top}
                         x2={cx}
                         y2={padding.top + chartHeight}
-                        stroke="#106BA3"
+                        stroke="var(--fb-primary)"
                         strokeWidth="1.5"
                         strokeDasharray="3 3"
                         opacity="0.6"
@@ -336,12 +336,12 @@ const FeedbackTrendChart = ({
                       cx={cx}
                       cy={cyTotal}
                       r={isHovered ? 5.5 : 3.5}
-                      fill="#106BA3"
+                      fill="var(--fb-primary)"
                       stroke="#ffffff"
                       strokeWidth="1.5"
                     />
-                    <circle cx={cx} cy={cyPos} r={isHovered ? 4.5 : 2.5} fill="#16a34a" />
-                    <circle cx={cx} cy={cyNeg} r={isHovered ? 4.5 : 2.5} fill="#dc2626" />
+                    <circle cx={cx} cy={cyPos} r={isHovered ? 4.5 : 2.5} fill="var(--fb-success)" />
+                    <circle cx={cx} cy={cyNeg} r={isHovered ? 4.5 : 2.5} fill="var(--fb-danger)" />
 
                     <rect
                       x={cx - chartWidth / (trendData.length * 2 || 1)}
@@ -364,7 +364,7 @@ const FeedbackTrendChart = ({
                     y={padding.top + chartHeight + 20}
                     textAnchor="middle"
                     fontSize="11"
-                    fill="#5c7080"
+                    fill="var(--fb-text-secondary)"
                     style={{ userSelect: "none" }}
                   >
                     {label.text ? label.text.slice(5) : ""}
@@ -382,8 +382,8 @@ const FeedbackTrendChart = ({
                   right: 16,
                   padding: "10px 14px",
                   borderRadius: 12,
-                  backgroundColor: "#ffffff",
-                  border: "1px solid #e2e8f0",
+                  backgroundColor: "var(--fb-bg-paper)",
+                  border: "1px solid var(--fb-border)",
                   boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
                   zIndex: 10,
                   minWidth: 130,
@@ -394,18 +394,18 @@ const FeedbackTrendChart = ({
                   pointerEvents: "none",
                 }}
               >
-                <span style={{ fontWeight: 700, color: "#5c7080", fontSize: 11 }}>
+                <span style={{ fontWeight: 700, color: "var(--fb-text-secondary)", fontSize: 11 }}>
                   {trendData[hoveredIndex].date}
                 </span>
-                <div style={{ display: "flex", justifyContent: "space-between", color: "#106BA3", fontWeight: 700 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", color: "var(--fb-primary)", fontWeight: 700 }}>
                   <span>Total:</span>
                   <span>{trendData[hoveredIndex].total || 0}</span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", color: "#16a34a", fontWeight: 600 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", color: "var(--fb-success)", fontWeight: 600 }}>
                   <span>Positive:</span>
                   <span>{trendData[hoveredIndex].positive || 0}</span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", color: "#dc2626", fontWeight: 600 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", color: "var(--fb-danger)", fontWeight: 600 }}>
                   <span>Negative:</span>
                   <span>{trendData[hoveredIndex].negative || 0}</span>
                 </div>
