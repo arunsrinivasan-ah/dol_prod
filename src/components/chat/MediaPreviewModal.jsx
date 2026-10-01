@@ -13,9 +13,10 @@ pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.vers
 
 const BLOCKED_KEYS = ["Escape", "F12", "PrintScreen"];
 
-const MediaPreviewModal = ({ open, onClose, type, src }) => {
+const MediaPreviewModal = ({ open, onClose, type, src, title }) => {
   const videoRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const isPdf = type === "pdf";
 
   /* 🔐 Security handlers */
   useEffect(() => {
@@ -67,33 +68,65 @@ const MediaPreviewModal = ({ open, onClose, type, src }) => {
     <Dialog
       open={open}
       onClose={onClose}
-      fullScreen={isFullscreen}
-      maxWidth="md"
+      fullScreen={isFullscreen || isPdf}
+      maxWidth={isPdf ? false : "md"}
       fullWidth
       PaperProps={{
         sx: {
           backgroundColor: "black",
           userSelect: "none",
           overflow: "hidden", // 🚫 no scroll in modal
+          ...(isPdf && {
+            width: "100vw",
+            height: "100vh",
+            maxWidth: "100vw",
+            maxHeight: "100vh",
+            m: 0,
+            borderRadius: 0,
+          }),
         },
       }}
     >
       {/* Top Right Controls */}
       <Stack
         direction="row"
-        spacing={1}
+        spacing={1.5}
+        alignItems="center"
         sx={{
-          position: "absolute",
-          top: 8,
-          right: 8,
-          zIndex: 10,
+          position: "fixed",
+          top: 12,
+          right: 16,
+          zIndex: 1400,
         }}
       >
-        {(type === "image" || type === "pdf") && (
+        {isPdf && title && (
+          <Box
+            sx={{
+              color: "rgba(255,255,255,0.9)",
+              backgroundColor: "rgba(0,0,0,0.65)",
+              backdropFilter: "blur(6px)",
+              px: 1.5,
+              py: 0.6,
+              borderRadius: "6px",
+              maxWidth: { xs: "50vw", sm: "60vw" },
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              fontSize: "0.85rem",
+              fontWeight: 500,
+              border: "1px solid rgba(255,255,255,0.15)",
+            }}
+            title={title}
+          >
+            {title}
+          </Box>
+        )}
+
+        {type === "image" && (
           <IconButton
             onClick={toggleFullscreen}
             sx={{
-              bgcolor: "black",
+              bgcolor: "rgba(0,0,0,0.65)",
               color: "white",
               "&:hover": {
                 bgcolor: "black",
@@ -107,12 +140,14 @@ const MediaPreviewModal = ({ open, onClose, type, src }) => {
         <IconButton
           onClick={onClose}
           sx={{
-            bgcolor: "black",
+            bgcolor: "rgba(0,0,0,0.65)",
             color: "white",
             "&:hover": {
               bgcolor: "black",
             },
+            boxShadow: "0 2px 8px rgba(0,0,0,0.5)",
           }}
+          title="Close"
         >
           <CloseIcon />
         </IconButton>
@@ -121,11 +156,16 @@ const MediaPreviewModal = ({ open, onClose, type, src }) => {
       <DialogContent
         sx={{
           p: 0,
-          height: isFullscreen ? "100vh" : 500,
+          height: (isFullscreen || isPdf) ? "100vh" : 500,
+          width: "100%",
           overflow:
-            isFullscreen && (type === "pdf" || type === "image")
+            isPdf
+              ? "hidden"
+              : isFullscreen && type === "image"
               ? "auto"
               : "hidden",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         {/* 🎥 VIDEO */}
@@ -164,7 +204,7 @@ const MediaPreviewModal = ({ open, onClose, type, src }) => {
         {type === "pdf" && (
           <SecurePdfViewer
             src={src}
-            isFullscreen={isFullscreen}
+            isFullscreen={isFullscreen || isPdf}
             onClose={onClose}
           />
         )}

@@ -280,10 +280,12 @@ const ChatMessage = ({
     open: false,
     type: null,
     src: null,
+    title: "",
   });
-  const openPreview = (type, src) => setPreviewMedia({ open: true, type, src });
+  const openPreview = (type, src, title = "") =>
+    setPreviewMedia({ open: true, type, src, title });
   const closePreview = () =>
-    setPreviewMedia({ open: false, type: null, src: null });
+    setPreviewMedia({ open: false, type: null, src: null, title: "" });
 
   const handleFollowUpQuestion = async (query) => {
     setSearchQuery(query);
@@ -446,10 +448,28 @@ const ChatMessage = ({
   // 3. Unified, deduplicated PDFs list (capped to strictly maximum 5)
   const normalizedPdfs = React.useMemo(() => {
     if (isGreeting || isOutOfScope || isUser) return [];
-    return (pdf_suggestions || msg?.pdfs || msg?.metadata?.pdfs || [])
+    const list = (pdf_suggestions || msg?.pdfs || msg?.metadata?.pdfs || [])
       .map(normalizePdf)
       .filter((pdf) => pdf && pdf.link && typeof pdf.link === "string" && pdf.link.trim().length > 0)
       .slice(0, 5);
+
+    const seenCounts = {};
+    return list.map((pdf) => {
+      let baseTitle = (pdf.title || "").trim();
+      if (!baseTitle) return pdf;
+
+      // Normalize Option 1 (strip any legacy "(Document)" suffix if present)
+      if (baseTitle.endsWith(" (Document)")) {
+        baseTitle = baseTitle.slice(0, -11).trim();
+      }
+
+      const count = seenCounts[baseTitle] || 0;
+      seenCounts[baseTitle] = count + 1;
+      if (count > 0) {
+        return { ...pdf, title: `${baseTitle} (${count})` };
+      }
+      return { ...pdf, title: baseTitle };
+    });
   }, [pdf_suggestions, msg?.pdfs, msg?.metadata?.pdfs, isGreeting, isOutOfScope, isUser]);
 
   const questionSuggestions = msg.question_suggestions || [];
@@ -886,7 +906,7 @@ const ChatMessage = ({
                     <Box
                       key={`${pdf.link}-${i}`}
                       sx={mediaCardSx}
-                      onClick={() => window.open(pdf.link, "_self")}
+                      onClick={() => openPreview("pdf", pdf.link, pdf.title)}
                       title={pdf.title}
                     >
                       <PdfThumbnail
@@ -1064,6 +1084,7 @@ const ChatMessage = ({
           open={previewMedia.open}
           type={previewMedia.type}
           src={previewMedia.src}
+          title={previewMedia.title}
           onClose={closePreview}
         />
       </Box>
