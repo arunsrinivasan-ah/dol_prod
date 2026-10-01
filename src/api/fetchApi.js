@@ -348,7 +348,9 @@ export const createSession = async () => {
     const userId = localStorage.getItem("user_id");
     return await apiPost(`${APP_URL}/sessions`, { user_id: userId });
   } catch (error) {
-    throw new Error("Unable to create a new session");
+    const err = new Error(error.message || "Unable to create a new session");
+    if (error.status) err.status = error.status;
+    throw err;
   }
 };
 

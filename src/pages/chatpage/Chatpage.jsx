@@ -53,12 +53,15 @@ const Chatpage = ({ userId, setUserId, onLogout }) => {
         });
       }
     } catch (error) {
-      console.error("Unable to fetch sessions");
+      console.error("Unable to fetch sessions", error);
+      if (error?.status === 401 && onLogout) {
+        onLogout();
+      }
     } finally {
       if (!isBackground) setSessionsLoading(false);
       fetchInProgressRef.current = false;
     }
-  }, []);
+  }, [onLogout]);
 
   const selectSession = useCallback(async (sessionId) => {
     if (!sessionId) return;
@@ -80,11 +83,14 @@ const Chatpage = ({ userId, setUserId, onLogout }) => {
       // Persist session ID for refresh
       localStorage.setItem("active_session_id", data.session_id);
     } catch (error) {
-      console.error("Unable to load session");
+      console.error("Unable to load session", error);
+      if (error?.status === 401 && onLogout) {
+        onLogout();
+      }
     } finally {
       setSessionDetailsLoading(false);
     }
-  }, []);
+  }, [onLogout]);
 
   useEffect(() => {
     if (initialLoadRef.current) return;

@@ -86,7 +86,7 @@ const normalizePdf = (pdf) => {
   if (!pdf) return { title: "", link: "", thumbnail: "" };
   if (typeof pdf === "string") {
     return {
-      title: "Document",
+      title: "",
       link: pdf,
       thumbnail: `/api/pdf_thumbnail?url=${encodeURIComponent(pdf)}`,
     };
@@ -94,20 +94,10 @@ const normalizePdf = (pdf) => {
   const link = pdf.link || pdf.Link || pdf.url || pdf.Url || "";
 
   let title = (pdf.title || pdf.Title || pdf.name || pdf.Name || "").trim();
-  if (!title && (pdf.about || pdf.About)) {
-    const aboutStr = String(pdf.about || pdf.About).replace(/<[^>]+>/g, "").trim();
-    if (aboutStr) {
-      if (aboutStr.includes("-")) {
-        const parts = aboutStr.split("-").map((p) => p.trim()).filter(Boolean);
-        title = parts[parts.length - 1] || aboutStr;
-      } else {
-        title = aboutStr.length > 55 ? `${aboutStr.substring(0, 52)}...` : aboutStr;
-      }
-    }
+  if (title.toLowerCase() === "reference document" || title.toLowerCase() === "document") {
+    title = "";
   }
-  if (!title && (pdf.topic_name || pdf.topicName || pdf.TopicName)) {
-    title = String(pdf.topic_name || pdf.topicName || pdf.TopicName).trim();
-  }
+
   if (!title && link) {
     try {
       const pathname = new URL(link, window.location.origin).pathname;
@@ -116,9 +106,6 @@ const normalizePdf = (pdf) => {
         title = decodeURIComponent(filename).replace(/[-_]+/g, " ").trim();
       }
     } catch (_) {}
-  }
-  if (!title) {
-    title = "Reference Document";
   }
 
   return {
@@ -899,7 +886,7 @@ const ChatMessage = ({
                     <Box
                       key={`${pdf.link}-${i}`}
                       sx={mediaCardSx}
-                      onClick={() => window.open(pdf.link, "_blank")}
+                      onClick={() => window.open(pdf.link, "_self")}
                       title={pdf.title}
                     >
                       <PdfThumbnail

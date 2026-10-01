@@ -9,7 +9,7 @@ const normalizeUrl = (url) => {
 };
 
 // Use the token already persisted by loginApi. Do not change global fetch/axios defaults.
-export const sessionFetch = (url, options = {}) => {
+export const sessionFetch = async (url, options = {}) => {
   const requestUrl = new URL(url, APP_URL);
   const apiUrl = new URL(APP_URL);
   const basePath = apiUrl.pathname.replace(/\/+$/, "");
@@ -31,12 +31,20 @@ export const sessionFetch = (url, options = {}) => {
       headers.set("Authorization", `Bearer ${token}`);
     }
   }
-  return fetch(url, {
+  const response = await fetch(url, {
     ...options,
     headers,
     // Authenticated API calls must not redirect to another destination.
     ...(headers.has("Authorization") && isAuthenticatedRequest ? { redirect: "error" } : {}),
   });
+
+  if (response.status === 401 && isAuthenticatedRequest) {
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+      window.dispatchEvent(new CustomEvent("dolphin:auth_unauthorized", { detail: { url } }));
+    }
+  }
+
+  return response;
 };
 
 const readBody = async (response) => {
@@ -122,7 +130,9 @@ export const apiRequest = async ({
 
   if (!response.ok) {
     const message = await readErrorMessage(response, `${method} request failed`);
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
   }
 
   if (!parseJson) {

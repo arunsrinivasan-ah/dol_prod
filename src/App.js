@@ -10,6 +10,7 @@ import './App.css'
 import { clearChatHistoryCache } from "./api/chatHistoryCache";
 import { logout } from "./api/apiAuth.js";
 import { isFeedbackAuthorized, getCurrentUserEmail } from "./utils/feedbackAuth.js";
+import { isTokenExpired } from "./utils/tokenUtils.js";
 
 function App() {
   const [userId, setUserId] = useState(null);
@@ -22,22 +23,54 @@ function App() {
     const storedUserId = localStorage.getItem("userId");
     const storedUserData = localStorage.getItem("userData");
 
-    if (storedUserId) {
-      setUserId(storedUserId);
-    }
-
+    let parsedData = null;
     if (storedUserData) {
       try {
-        const parsedData = JSON.parse(storedUserData);
-        setUserRole(parsedData.user_role);
-        const email = (parsedData.email || parsedData.user_profile?.email || parsedData.user_email || parsedData.user_name || "").trim().toLowerCase();
-        setUserEmail(email);
+        parsedData = JSON.parse(storedUserData);
       } catch (e) {
         console.error("Error parsing user data");
       }
     }
 
+    const token = parsedData?.access_token;
+    // If no access token, or access token has expired, purge stale session
+    if (!token || isTokenExpired(token)) {
+      if (storedUserId || storedUserData) {
+        clearChatHistoryCache();
+        localStorage.removeItem("userId");
+        localStorage.removeItem("user_id");
+        localStorage.removeItem("userData");
+        localStorage.removeItem("active_session_id");
+      }
+      setUserId(null);
+      setUserRole(null);
+      setUserEmail("");
+      setAuthLoading(false);
+      return;
+    }
+
+    if (storedUserId) {
+      setUserId(storedUserId);
+    }
+
+    if (parsedData) {
+      setUserRole(parsedData.user_role);
+      const email = (parsedData.email || parsedData.user_profile?.email || parsedData.user_email || parsedData.user_name || "").trim().toLowerCase();
+      setUserEmail(email);
+    }
+
     setAuthLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      handleLogout();
+    };
+
+    window.addEventListener("dolphin:auth_unauthorized", handleUnauthorized);
+    return () => {
+      window.removeEventListener("dolphin:auth_unauthorized", handleUnauthorized);
+    };
   }, []);
 
   const handleLoginSuccess = (id) => {
