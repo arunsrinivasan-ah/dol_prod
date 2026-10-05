@@ -375,9 +375,11 @@ const ChatMessage = ({
 
   const isGreeting =
     msg.category === "GREETING" ||
+    msg.type === "greeting" ||
     (typeof msg.content === "string" && (
-      /^(\s*hello|\s*hi\b|\s*hey\b|\s*good\s+morning|\s*good\s+evening|\s*good\s+day)/i.test(msg.content) &&
-      msg.content.length < 250 &&
+      (/^(\s*hello|\s*hi\b|\s*hey\b|\s*good\s+morning|\s*good\s+evening|\s*good\s+day)/i.test(msg.content) ||
+       msg.content.includes("Welcome to Dolphin AI") ||
+       msg.content.includes("maritime AI assistant")) &&
       !/(video|videos|watch|clip)/i.test(msg.content)
     ));
 
@@ -433,11 +435,25 @@ const ChatMessage = ({
 
         const normKey = img.url.toLowerCase().replace(/\/+/g, "/").replace(/\/+$/, "");
         if (!normKey || seen.has(normKey)) return false;
+
+        const cleanTitle = (img.title || "").trim().toLowerCase();
+        const normTitleKey = cleanTitle.replace(/[^a-z0-9]/g, "");
+        if (normTitleKey && seen.has(normTitleKey)) return false;
+
         seen.add(normKey);
+        if (normTitleKey) seen.add(normTitleKey);
 
         const lowerUrl = img.url.toLowerCase();
-        const lowerTitle = (img.title || "").toLowerCase();
-        if ((lowerUrl.includes("/storage/pdf_images/") || lowerUrl.includes("_img_")) && (lowerTitle.includes("guide") || lowerTitle.includes("manual") || lowerTitle.includes("checklist") || lowerTitle.includes("handbook"))) {
+        if (
+          (lowerUrl.includes("/storage/pdf_images/") || lowerUrl.includes("_img_")) &&
+          (cleanTitle.includes("guide") ||
+            cleanTitle.includes("manual") ||
+            cleanTitle.includes("checklist") ||
+            cleanTitle.includes("handbook") ||
+            cleanTitle.includes("permit") ||
+            cleanTitle.includes("form") ||
+            cleanTitle.includes("procedure"))
+        ) {
           return false;
         }
         return true;
@@ -448,28 +464,50 @@ const ChatMessage = ({
   // 3. Unified, deduplicated PDFs list (capped to strictly maximum 5)
   const normalizedPdfs = React.useMemo(() => {
     if (isGreeting || isOutOfScope || isUser) return [];
-    const list = (pdf_suggestions || msg?.pdfs || msg?.metadata?.pdfs || [])
-      .map(normalizePdf)
-      .filter((pdf) => pdf && pdf.link && typeof pdf.link === "string" && pdf.link.trim().length > 0)
-      .slice(0, 5);
+    const seen = new Set();
+    const result = [];
+    const rawList = [
+      ...(pdf_suggestions || []),
+      ...(msg?.pdfs || []),
+      ...(msg?.metadata?.pdfs || []),
+    ];
 
-    const seenCounts = {};
-    return list.map((pdf) => {
-      let baseTitle = (pdf.title || "").trim();
-      if (!baseTitle) return pdf;
-
-      // Normalize Option 1 (strip any legacy "(Document)" suffix if present)
-      if (baseTitle.endsWith(" (Document)")) {
-        baseTitle = baseTitle.slice(0, -11).trim();
+    for (const rawPdf of rawList) {
+      const pdf = normalizePdf(rawPdf);
+      if (!pdf || !pdf.link || typeof pdf.link !== "string" || pdf.link.trim().length === 0) {
+        continue;
       }
 
-      const count = seenCounts[baseTitle] || 0;
-      seenCounts[baseTitle] = count + 1;
-      if (count > 0) {
-        return { ...pdf, title: `${baseTitle} (${count})` };
+      const cleanLink = pdf.link.trim().toLowerCase().replace(/\/+$/, "");
+      let cleanTitle = (pdf.title || "").trim().toLowerCase();
+      cleanTitle = cleanTitle.replace(/\s*\(\d+\)$/, "").trim();
+      if (cleanTitle.endsWith(" (document)")) {
+        cleanTitle = cleanTitle.slice(0, -11).trim();
       }
-      return { ...pdf, title: baseTitle };
-    });
+      const normTitleKey = cleanTitle.replace(/[^a-z0-9]/g, "");
+
+      // Deduplicate by cleanLink and normalized alphanumeric title key
+      if (seen.has(cleanLink) || (normTitleKey && seen.has(normTitleKey))) {
+        continue;
+      }
+      seen.add(cleanLink);
+      if (normTitleKey) seen.add(normTitleKey);
+
+      let displayTitle = (pdf.title || "").trim();
+      displayTitle = displayTitle.replace(/\s*\(\d+\)$/, "").trim();
+      if (displayTitle.endsWith(" (Document)")) {
+        displayTitle = displayTitle.slice(0, -11).trim();
+      }
+
+      result.push({
+        ...pdf,
+        title: displayTitle || "Reference Document",
+      });
+
+      if (result.length >= 5) break;
+    }
+
+    return result;
   }, [pdf_suggestions, msg?.pdfs, msg?.metadata?.pdfs, isGreeting, isOutOfScope, isUser]);
 
   const questionSuggestions = msg.question_suggestions || [];
@@ -754,7 +792,7 @@ const ChatMessage = ({
                     <Box
                       key={`${img.url}-${i}`}
                       sx={mediaCardSx}
-                      onClick={() => openPreview("image", img.url)}
+                      onClick={() => openPreview("image", img.url, img.title)}
                     >
                       <Box
                         component="img"
@@ -817,7 +855,7 @@ const ChatMessage = ({
                     <Box
                       key={`${video.url}-${i}`}
                       sx={mediaCardSx}
-                      onClick={() => openPreview("video", video.url)}
+                      onClick={() => openPreview("video", video.url, video.title)}
                     >
                       {video.thumbnail && (
                         <Box

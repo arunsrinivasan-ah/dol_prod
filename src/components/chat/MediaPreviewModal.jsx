@@ -54,11 +54,14 @@ const MediaPreviewModal = ({ open, onClose, type, src, title }) => {
     };
   }, [open, onClose]);
 
-  /* ⏹ Stop video on close */
+  /* ⏹ Stop video & reset fullscreen on close */
   useEffect(() => {
-    if (!open && videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.currentTime = 0;
+    if (!open) {
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+      }
+      setIsFullscreen(false);
     }
   }, [open]);
 
@@ -68,15 +71,16 @@ const MediaPreviewModal = ({ open, onClose, type, src, title }) => {
     <Dialog
       open={open}
       onClose={onClose}
-      fullScreen={isFullscreen || isPdf}
-      maxWidth={isPdf ? false : "md"}
+      fullScreen={isFullscreen}
+      maxWidth={isFullscreen ? false : "md"}
       fullWidth
       PaperProps={{
         sx: {
           backgroundColor: "black",
           userSelect: "none",
           overflow: "hidden", // 🚫 no scroll in modal
-          ...(isPdf && {
+          position: "relative",
+          ...(isFullscreen && {
             width: "100vw",
             height: "100vh",
             maxWidth: "100vw",
@@ -93,13 +97,13 @@ const MediaPreviewModal = ({ open, onClose, type, src, title }) => {
         spacing={1.5}
         alignItems="center"
         sx={{
-          position: "fixed",
+          position: "absolute",
           top: 12,
           right: 16,
           zIndex: 1400,
         }}
       >
-        {isPdf && title && (
+        {title && (
           <Box
             sx={{
               color: "rgba(255,255,255,0.9)",
@@ -108,7 +112,7 @@ const MediaPreviewModal = ({ open, onClose, type, src, title }) => {
               px: 1.5,
               py: 0.6,
               borderRadius: "6px",
-              maxWidth: { xs: "50vw", sm: "60vw" },
+              maxWidth: { xs: "40vw", sm: "50vw" },
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -122,7 +126,7 @@ const MediaPreviewModal = ({ open, onClose, type, src, title }) => {
           </Box>
         )}
 
-        {type === "image" && (
+        {(type === "image" || type === "pdf" || type === "video") && (
           <IconButton
             onClick={toggleFullscreen}
             sx={{
@@ -131,7 +135,9 @@ const MediaPreviewModal = ({ open, onClose, type, src, title }) => {
               "&:hover": {
                 bgcolor: "black",
               },
+              boxShadow: "0 2px 8px rgba(0,0,0,0.5)",
             }}
+            title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
           >
             {isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
           </IconButton>
@@ -156,7 +162,7 @@ const MediaPreviewModal = ({ open, onClose, type, src, title }) => {
       <DialogContent
         sx={{
           p: 0,
-          height: (isFullscreen || isPdf) ? "100vh" : 500,
+          height: isFullscreen ? "100vh" : { xs: 450, sm: 550 },
           width: "100%",
           overflow:
             isPdf
@@ -204,7 +210,7 @@ const MediaPreviewModal = ({ open, onClose, type, src, title }) => {
         {type === "pdf" && (
           <SecurePdfViewer
             src={src}
-            isFullscreen={isFullscreen || isPdf}
+            isFullscreen={isFullscreen}
             onClose={onClose}
           />
         )}
