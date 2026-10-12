@@ -137,13 +137,15 @@ async def chat(
 
     # RUN CHAT (FIXED)
     t_chat_start = time.perf_counter()
+    endpoint_called = f"{request.method} {request.url.path}"
     node_response, updated_messages, standalone_query, understanding_summary, extras = await chat_service.run_chat(
         user_id=user_id,
         session_id=session_id,
         db_messages=messages,
         current_query=user_content,
         category=payload.category,
-        user_details=user_details
+        user_details=user_details,
+        api_endpoint=endpoint_called,
     )
 
     logger.info(f"Updated messages count: {len(updated_messages)}")
@@ -339,6 +341,7 @@ async def chat1(
             # -----------------------------
             # STEP 2: CHAT PIPELINE TASK
             # -----------------------------
+            endpoint_called = f"{request.method} {request.url.path}"
             chat_task = asyncio.create_task(
                 chat_service.run_chat(
                     user_id=user_id,
@@ -349,6 +352,7 @@ async def chat1(
                     user_details=user_details,
                     status_callback=status_callback,
                     stream_callback=stream_event_callback,
+                    api_endpoint=endpoint_called,
                 )
             )
 

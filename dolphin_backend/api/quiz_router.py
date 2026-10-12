@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import time
 from typing import Dict, List
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from models.quiz_models import (
     QuizGenerateRequest,
@@ -91,7 +92,8 @@ def _question_bank(topic: str) -> List[Dict[str, object]]:
 
 
 @router.post("/generate", response_model=QuizGenerateResponse)
-def generate_quiz(payload: QuizGenerateRequest) -> QuizGenerateResponse:
+def generate_quiz(payload: QuizGenerateRequest, request: Request = None) -> QuizGenerateResponse:
+    t_start = time.perf_counter()
     quiz_id = str(uuid4())
     question_bank = _question_bank(payload.topic)
 
@@ -110,12 +112,39 @@ def generate_quiz(payload: QuizGenerateRequest) -> QuizGenerateResponse:
         answers[question_id] = question["correct"]
 
     QUIZ_STORE[quiz_id] = {"questions": questions, "answers": answers}
+    dur = time.perf_counter() - t_start
+
+    try:
+        from services.terminal_logger import print_operation_execution_boxes
+        actual_endpoint = f"{request.method} {request.url.path}" if request else "POST /quiz/generate"
+        print_operation_execution_boxes(
+            operation_name="Maritime Quiz Generation",
+            api_endpoint=actual_endpoint,
+            request_details={"Maritime Topic": payload.topic or "Marine Engineering & Seamanship", "Question Limit": len(questions)},
+            pipeline_steps=[
+                {
+                    "title": "Maritime Question Bank Filtering",
+                    "code_ref": "dolphin_backend/api/quiz_router.py (lines 25-90 -> _question_bank())",
+                    "Matched Questions": f"{len(question_bank)} questions ready",
+                },
+                {
+                    "title": "UUID Tagging & Memory Registration",
+                    "code_ref": "dolphin_backend/api/quiz_router.py (lines 94-114 -> generate_quiz())",
+                    "Session Store": f"QUIZ_STORE[{quiz_id}]",
+                }
+            ],
+            response_details={"Generated Quiz ID": quiz_id, "Questions Count": len(questions)},
+            duration=dur,
+        )
+    except Exception:
+        pass
 
     return QuizGenerateResponse(quiz_id=quiz_id, questions=questions)
 
 
 @router.post("/submit", response_model=QuizSubmitResponse)
-def submit_quiz(payload: QuizSubmitRequest) -> QuizSubmitResponse:
+def submit_quiz(payload: QuizSubmitRequest, request: Request = None) -> QuizSubmitResponse:
+    t_start = time.perf_counter()
     quiz = QUIZ_STORE.get(payload.quiz_id)
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
@@ -144,6 +173,27 @@ def submit_quiz(payload: QuizSubmitRequest) -> QuizSubmitResponse:
 
     total_questions = len(questions)
     percentage = round((score / total_questions) * 100, 2) if total_questions else 0
+    dur = time.perf_counter() - t_start
+
+    try:
+        from services.terminal_logger import print_operation_execution_boxes
+        actual_endpoint = f"{request.method} {request.url.path}" if request else "POST /quiz/submit"
+        print_operation_execution_boxes(
+            operation_name="Maritime Quiz Evaluation",
+            api_endpoint=actual_endpoint,
+            request_details={"Quiz ID": payload.quiz_id, "Submissions Count": len(payload.answers)},
+            pipeline_steps=[
+                {
+                    "title": "In-Memory Answer Key Verification",
+                    "code_ref": "dolphin_backend/api/quiz_router.py (lines 118-155 -> submit_quiz())",
+                    "Score Calculation": f"{score}/{total_questions} ({percentage}%)",
+                }
+            ],
+            response_details={"Final Score": f"{score}/{total_questions}", "Percentage": f"{percentage}%"},
+            duration=dur,
+        )
+    except Exception:
+        pass
 
     return QuizSubmitResponse(
         score=score,

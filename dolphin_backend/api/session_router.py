@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 from datetime import datetime
@@ -165,12 +166,43 @@ def _build_summary(session: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 @router.get("", response_model=List[SessionSummary])
-async def list_sessions(user_id: Optional[str] = None, search: Optional[str] = None,
-                        pool: Pool = Depends(get_db_pool), user=Depends(get_current_user)):
-    user_id = session_scope(user, user_id)
+async def list_sessions(
+    request: Request,
+    user_id: Optional[str] = None,
+    search: Optional[str] = None,
+    pool: Pool = Depends(get_db_pool),
+    user=Depends(get_current_user)
+):
+    t_start = time.perf_counter()
+    resolved_uid = session_scope(user, user_id)
     session_service = SessionService(pool)
-    sessions = await session_service.list_sessions(user_id, search)
-    return [_build_summary(session) for session in sessions]
+    sessions = await session_service.list_sessions(resolved_uid, search)
+    results = [_build_summary(session) for session in sessions]
+    dur = time.perf_counter() - t_start
+
+    try:
+        from services.terminal_logger import print_operation_execution_boxes
+        actual_endpoint = f"{request.method} {request.url.path}"
+        print_operation_execution_boxes(
+            operation_name="List Chat Sessions",
+            api_endpoint=actual_endpoint,
+            user_id=resolved_uid,
+            user_name=getattr(user, "name", "User"),
+            request_details={"Search Filter": search or "None", "User Scope": resolved_uid},
+            pipeline_steps=[
+                {
+                    "title": "Session History Fetch & Metadata Parse",
+                    "code_ref": "dolphin_backend/services/session_service.py (lines 80-120 -> list_sessions())",
+                    "Database Target": "PostgreSQL 'chat_sessions' table",
+                }
+            ],
+            response_details={"Sessions Returned": len(results)},
+            duration=dur,
+        )
+    except Exception:
+        pass
+
+    return results
 
 @router.post("", response_model=SessionSummary)
 async def create_session(
@@ -179,14 +211,46 @@ async def create_session(
     user=Depends(get_current_user),
     pool: Pool = Depends(get_db_pool),
 ):
+    t_start = time.perf_counter()
     user_id = session_scope(user, payload.user_id)
-
-    print("Creating session for:", user_id)
 
     session_service = SessionService(pool)
     session = await session_service.create_session(user_id, payload.title)
+    dur = time.perf_counter() - t_start
+    summary = _build_summary(session)
 
-    return _build_summary(session)
+    try:
+        from services.terminal_logger import print_operation_execution_boxes
+        actual_endpoint = f"{request.method} {request.url.path}"
+        print_operation_execution_boxes(
+            operation_name="Create Chat Session",
+            api_endpoint=actual_endpoint,
+            user_id=user_id,
+            user_name=getattr(user, "name", "User"),
+            session_id=session.get("session_id"),
+            request_details={"Title": payload.title or "(Auto Generated)", "User Scope": user_id},
+            pipeline_steps=[
+                {
+                    "title": "UUID Generation & Session Record Init",
+                    "code_ref": "dolphin_backend/services/session_service.py (lines 40-75 -> create_session())",
+                    "Database Target": "PostgreSQL 'chat_sessions' table",
+                },
+                {
+                    "title": "Active Session Registration in Redis",
+                    "code_ref": "dolphin_backend/core/redis_client.py (lines 90-110 -> set_active_session())",
+                    "Redis Key Target": f"active_session:{user_id}",
+                }
+            ],
+            response_details={
+                "Created Session ID": session.get("session_id"),
+                "Initial Title": session.get("title") or "New Maritime Chat",
+            },
+            duration=dur,
+        )
+    except Exception:
+        pass
+
+    return summary
 
 @router.get("/{session_id}", response_model=SessionDetail)
 async def get_session(

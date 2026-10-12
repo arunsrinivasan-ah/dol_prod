@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from asyncpg import Pool
 from pydantic import BaseModel
 from loguru import logger
+import time
 import requests
 import json
 
@@ -44,6 +45,7 @@ async def login(
     pool: Pool = Depends(get_db_pool)
 ) -> LoginResponse:
 
+    t_login_start = time.perf_counter()
     auth_service = AuthService(pool)
 
     # -------------------------------------------------
@@ -282,17 +284,93 @@ async def login(
         # -------------------------------------------------
         # RESPONSE
         # -------------------------------------------------
+        access_token_val = create_access_token(str(user.id))
+        login_dur = time.perf_counter() - t_login_start
+        actual_endpoint = f"{request.method} {request.url.path}"
+
+        try:
+            from services.terminal_logger import print_login_execution_boxes
+            auth_type = "JWT Token Authentication" if payload.token else "Dolphin CMS Direct Authentication"
+            client_host = request.client.host if request.client else "127.0.0.1"
+            print_login_execution_boxes(
+                user_name=user.name or "User",
+                user_id=str(user.id),
+                email=user.email or "unknown@domain.com",
+                role_name=role_name or "USER",
+                ship_name=user.ship_name or "General Vessel",
+                company_name=user.company_name or "Maritime Academy",
+                company_id=str(user.company_id or "N/A"),
+                api_endpoint=actual_endpoint,
+                auth_method=auth_type,
+                company_courses_count=len(company_courses),
+                token_preview=access_token_val[:32] if access_token_val else "N/A",
+                duration=login_dur,
+                client_ip=client_host,
+            )
+        except Exception as log_err:
+            logger.debug(f"Failed to print login execution boxes: {log_err}")
+
         return LoginResponse(
-            access_token=create_access_token(str(user.id)),
+            access_token=access_token_val,
             user_id=str(user.id),
             name=user.name,
             email=user.email,
             user_role=role_name,
         )
-    except HTTPException:
+    except HTTPException as he:
+        try:
+            from services.terminal_logger import print_login_execution_boxes
+            login_dur = time.perf_counter() - t_login_start
+            actual_endpoint = f"{request.method} {request.url.path}"
+            client_host = request.client.host if request.client else "127.0.0.1"
+            email_val = payload.email or (str(payload.token)[:20] if payload.token else "anonymous")
+            print_login_execution_boxes(
+                user_name="Failed Attempt",
+                user_id="N/A",
+                email=str(email_val),
+                role_name="N/A",
+                ship_name="N/A",
+                company_name="N/A",
+                company_id="N/A",
+                api_endpoint=actual_endpoint,
+                auth_method="JWT Token Authentication" if payload.token else "Dolphin CMS Direct Authentication",
+                company_courses_count=0,
+                token_preview="None",
+                duration=login_dur,
+                client_ip=client_host,
+                status_code=he.status_code,
+                error_message=str(he.detail),
+            )
+        except Exception:
+            pass
         raise
     except Exception as e:
         logger.exception(f"Unexpected error during login: {e}")
+        try:
+            from services.terminal_logger import print_login_execution_boxes
+            login_dur = time.perf_counter() - t_login_start
+            actual_endpoint = f"{request.method} {request.url.path}"
+            client_host = request.client.host if request.client else "127.0.0.1"
+            email_val = payload.email or (str(payload.token)[:20] if payload.token else "anonymous")
+            print_login_execution_boxes(
+                user_name="Error",
+                user_id="N/A",
+                email=str(email_val),
+                role_name="N/A",
+                ship_name="N/A",
+                company_name="N/A",
+                company_id="N/A",
+                api_endpoint=actual_endpoint,
+                auth_method="JWT Token Authentication" if payload.token else "Dolphin CMS Direct Authentication",
+                company_courses_count=0,
+                token_preview="None",
+                duration=login_dur,
+                client_ip=client_host,
+                status_code=500,
+                error_message=str(e),
+            )
+        except Exception:
+            pass
         raise HTTPException(
             status_code=500,
             detail=f"Login failed: {str(e)}"
@@ -460,7 +538,7 @@ TEST_USERS = {
 # --------------------------------------------------
 
 @router.post("/test-login")
-async def test_login(payload: TestLoginRequest):
+async def test_login(request: Request, payload: TestLoginRequest):
     """
     Login Examples:
 
@@ -494,6 +572,28 @@ async def test_login(payload: TestLoginRequest):
         "company_name": payload.company or "",
         "user_id": user["user_id"]   # automatically assigned
     }
+
+    try:
+        from services.terminal_logger import print_login_execution_boxes
+        actual_endpoint = f"{request.method} {request.url.path}"
+        client_host = request.client.host if request.client else "127.0.0.1"
+        print_login_execution_boxes(
+            user_name=payload.username,
+            user_id=str(user["user_id"]),
+            email=f"{payload.username}@maritime-test.com",
+            role_name=payload.role or "Student",
+            ship_name=payload.ship or "Test Vessel",
+            company_name=payload.company or "Maritime Academy",
+            company_id="TEST-001",
+            api_endpoint=actual_endpoint,
+            auth_method="Local Mock Test Authentication",
+            company_courses_count=0,
+            token_preview="mock-test-jwt-bearer-active",
+            duration=0.005,
+            client_ip=client_host,
+        )
+    except Exception as log_err:
+        logger.debug(f"Failed to print test login boxes: {log_err}")
 
     return {
         "message": "Test login successful",

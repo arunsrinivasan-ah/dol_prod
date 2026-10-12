@@ -2402,6 +2402,7 @@ Rules:
         user_details: dict | None = None,
         status_callback: Optional[Any] = None,
         stream_callback: Optional[Any] = None,
+        **kwargs,
     ) -> Tuple[NodeResponse, List[Dict[str, Any]], str, str, Dict[str, Any]]:
 
         logger.info("Running chat pipeline")
@@ -3035,6 +3036,57 @@ Rules:
             final_cleaned_history[-1]["video_suggestions"] = final_videos
 
         latencies["pipeline_total"] = time.perf_counter() - t_pipeline_start
+
+        # Print the clean, structured 3-box terminal summary
+        try:
+            from services.terminal_logger import print_chat_execution_boxes
+            prompt_file = "dolphin_backend/pipeline/query.py" if node_type != "company" else "dolphin_backend/pipeline/company_query.py"
+            prompt_tmpl = "QUERY_PROMPT (Pedagogical Maritime Tutor)" if node_type != "company" else "PROMPT (Company Guidance)"
+            model_used = getattr(settings, "openai_model", "gpt-4o-mini")
+            api_endpoint = kwargs.get("api_endpoint", "POST /chat")
+
+            tmpl_text = None
+            start_line = 18
+            end_line = 170
+            try:
+                if node_type != "company":
+                    from pipeline.query import QUERY_PROMPT
+                    tmpl_text = QUERY_PROMPT
+                    start_line = 18
+                    end_line = 170
+                else:
+                    from pipeline.company_query import PROMPT as COMPANY_PROMPT
+                    tmpl_text = COMPANY_PROMPT
+                    start_line = 27
+                    end_line = 70
+            except Exception:
+                pass
+
+            print_chat_execution_boxes(
+                user_query=current_query,
+                user_profile=user_profile,
+                user_id=user_id,
+                session_id=session_id,
+                router_decision=router_decision,
+                node_type=node_type,
+                standalone_query=standalone_query,
+                retrieval_chunks=retrieval_chunks,
+                prompt_file=prompt_file,
+                prompt_template_name=prompt_tmpl,
+                model_name=model_used,
+                response_content=validated.content or assistant_content or "",
+                videos=final_videos,
+                images=all_images,
+                latencies=latencies,
+                company_answer=company_answer,
+                api_endpoint=api_endpoint,
+                prompt_template_text=tmpl_text,
+                prompt_start_line=start_line,
+                prompt_end_line=end_line,
+            )
+        except Exception as e:
+            logger.debug(f"Failed to print terminal summary boxes: {e}")
+
         return (
             validated,
             final_cleaned_history,
