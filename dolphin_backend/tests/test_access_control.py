@@ -93,6 +93,30 @@ def test_own_paginated_sessions_filter_both_count_and_data(client):
     assert count.args[1:] == ("owner", date(2026, 1, 1), date(2026, 1, 2), "%Ann%")
     assert data.args[1:] == (*count.args[1:], 7, 2)
     assert "LIMIT $5" in data.args[0]
+    assert "u.email AS email" in data.args[0]
+
+
+def test_paginated_sessions_response_includes_email(client):
+    http, pool = client
+    pool.fetch.return_value = [
+        {
+            "id": "88b6aef4-742d-455c-a2d1-fada31a9a6dc",
+            "username": "pammu",
+            "email": "pammu167@gmail.com",
+            "chat_title": "What are all the jobs for OOW when the ship is in Anchorage?",
+            "time": datetime(2026, 10, 13, 10, 49, 12, tzinfo=timezone.utc),
+            "session_id": "d18dd289-7e37-45c9-a8c1-17bbfb53a8b2",
+            "chat_count": 1,
+        }
+    ]
+    response = http.get("/sessions/?limit=10&offset=0", headers=headers())
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload["data"]) == 1
+    item = payload["data"][0]
+    assert item["email"] == "pammu167@gmail.com"
+    assert item["username"] == "pammu"
+    assert item["session_id"] == "d18dd289-7e37-45c9-a8c1-17bbfb53a8b2"
 
 
 def test_privileged_all_sessions_and_users(client):
