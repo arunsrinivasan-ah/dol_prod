@@ -1,363 +1,342 @@
-# 🐬 Dolphin Marine Tutor AI - Complete API Endpoint Architecture & Analysis
+# 🐬 Dolphin Marine Tutor AI - Complete API Technical Reference
 
-This document provides a comprehensive technical analysis of all **71 API endpoints** implemented in the Dolphin Marine Tutor AI backend. It details the purpose, HTTP methods, request payloads, response schemas, database/Redis interactions, and AI pipeline routing for every module.
-
----
-
-## 🏛️ System Architecture Overview
-
-```mermaid
-graph TD
-    Client[Dolphin UI / Mobile Client] -->|HTTP / SSE Stream| Ingress[FastAPI Application :8000]
-    
-    Ingress --> Middleware[Security, GZip, ProcessTime, Rate Limiter]
-    
-    Middleware --> AuthModule[Auth & User Routers /login, /users]
-    Middleware --> ChatModule[Chat Router /chat, /chat/working-stream]
-    Middleware --> CompanyModule[Company Router /companies]
-    Middleware --> SyncModule[Course Sync Router /sync]
-    Middleware --> QuizModule[Quiz Router /quiz]
-    Middleware --> SessionModule[Session Router /sessions]
-    Middleware --> FeedbackModule[Feedback & DPO Router /feedback]
-    Middleware --> TranscribeModule[Transcribe Router /transcribe]
-    
-    ChatModule --> QueryAnalyzer[Query Analyzer & GPT Intent Service]
-    ChatModule --> FAISS[FAISS Course Vector Store]
-    ChatModule --> CompanyStore[Company Document FAISS & Postgres]
-    ChatModule --> LLM[OpenAI GPT-4o-mini / GPT-4o]
-    
-    AuthModule --> Redis[(Redis Cache)]
-    AuthModule --> PG[(PostgreSQL DB)]
-    SessionModule --> Redis
-    SessionModule --> PG
-    CompanyModule --> PG
-    CompanyModule --> CompanyStore
-```
+**Version:** `2.0.0`  
+**Base URL (Local):** `http://localhost:8000`  
+**Swagger UI:** [http://localhost:8000/docs](http://localhost:8000/docs)  
+**ReDoc:** [http://localhost:8000/redoc](http://localhost:8000/redoc)  
+**OpenAPI Specification:** [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
 
 ---
 
-## 📑 Module Index
+## 📑 Table of Contents
 
-| # | Module / Tag | Base Path | Endpoints | Core Functionality |
-|---|---|---|---|---|
-| 1 | **[Chat & Real-time AI](#1-chat--real-time-ai-module)** | `/chat` | 3 | Real-time SSE streaming, LLM response generation, SMS template extraction, topic clarification |
-| 2 | **[Authentication & Access](#2-authentication--access-module)** | `/login`, `/logout` | 8 | CMS token validation, user creation, Redis profile caching, user course enrollment |
-| 3 | **[Company Documents & SMS](#3-company-documents--sms-manuals-module)** | `/companies` | 1 | Upload company SMS manuals, word doc text extraction, FAISS vector indexing |
-| 4 | **[Sessions & History](#4-sessions--conversation-history-module)** | `/sessions` | 10 | Session lifecycle, Redis message cache, persistent PostgreSQL history, bookmarking |
-| 5 | **[Quiz & Assessment](#5-quiz--assessment-module)** | `/quiz` | 3 | MCQ generation from topic curriculum, answer submission, automated grading |
-| 6 | **[Course Synchronizer](#6-course-synchronizer-module)** | `/sync` | 6 | CMS curriculum ingestion, master content sync, Excel course content sync |
-| 7 | **[Feedback & DPO Dataset](#7-feedback--rlhf--dpo-module)** | `/feedback` | 21 | RLHF feedback collection, approval/rejection queues, DPO dataset generation for fine-tuning |
-| 8 | **[Course Verification](#8-course-verification-module)** | `/course` | 1 | Validates if requested maritime topics match enrolled company/user courses |
-| 9 | **[User Administration](#9-user-administration-module)** | `/users` | 2 | Administrative user listings, role updates, company permission assignments |
-| 10 | **[Video Transcription](#10-video-transcription-module)** | `/transcribe` | 1 | Video transcription processing, timestamp alignment, vector chunking |
-| 11 | **[General & Media Storage](#11-general--storage-module)** | `/storage`, `/images`, etc. | 15 | Static media streaming, machinery diagram delivery, PDF thumbnail generation, system health |
-
----
-
-## 1. Chat & Real-time AI Module
-
-Source File: `backend/api/chat_router.py`  
-Pipeline Service: `backend/services/chat_service.py`
-
-### Endpoints Overview
-
-| Method | Path | Summary | Description |
-|---|---|---|---|
-| `POST` | `/chat` | Non-streaming Chat | Full single-request query processing returning a complete `NodeResponse` |
-| `POST` | `/chat/working-stream` | Streaming Chat (SSE) | Production endpoint used by UI for real-time Server-Sent Events streaming |
-| `POST` | `/chat/switch-session` | Switch Active Session | Sets active session ID in Redis for the user |
+1. [Architecture & Global Conventions](#1-architecture--global-conventions)
+2. [Module 1: Chat & Real-Time AI Stream](#2-module-1-chat--real-time-ai-stream)
+3. [Module 2: Authentication & User Access](#3-module-2-authentication--user-access)
+4. [Module 3: Company Documents & SMS Manuals](#4-module-3-company-documents--sms-manuals)
+5. [Module 4: Sessions & Conversation History](#5-module-4-sessions--conversation-history)
+6. [Module 5: Quiz & Assessment](#6-module-5-quiz--assessment)
+7. [Module 6: Course Synchronization](#7-module-6-course-synchronization)
+8. [Module 7: Human Feedback & DPO Dataset](#8-module-7-human-feedback--dpo-dataset)
+9. [Module 8: Course Verification](#9-module-8-course-verification)
+10. [Module 9: User Administration](#10-module-9-user-administration)
+11. [Module 10: Video Transcription](#11-module-10-video-transcription)
+12. [Module 11: Storage, Media & System Health](#12-module-11-storage-media--system-health)
+13. [Error Handling & HTTP Status Codes](#13-error-handling--http-status-codes)
 
 ---
 
-### Deep-Dive: `POST /chat/working-stream`
-- **Purpose**: Primary conversational interface. Streams tokens in real-time, displays thinking stages, handles Safety Management System (SMS) permit discovery/generation, dispatches "Did you mean...?" topic clarifications, and enriches responses with machinery images and video clips.
-- **Request Headers**: `Content-Type: application/json`, Cookie: `marine_user_id` (optional).
+## 1. Architecture & Global Conventions
+
+### 1.1 Ingress & Middleware Stack
+Every request through the FastAPI application traverses the following middleware stack:
+1. **Security Headers**: HSTS, X-Content-Type-Options (`nosniff`), X-Frame-Options (`DENY`).
+2. **Process Time Header**: Adds `X-Process-Time` duration header in seconds.
+3. **GZip Compression**: Automatic compression for responses exceeding 1,000 bytes.
+4. **Rate Limiting**: Managed via SlowAPI and Redis key-value stores.
+5. **CORS**: Allows cross-origin requests from authenticated frontends with `credentials: include`.
+
+### 1.2 Authentication Headers & Cookies
+- **Session Cookie**: `marine_session_id` (UUID format).
+- **User Cookie**: `marine_user_id` (User ID or email string).
+- **Bearer Token**: `Authorization: Bearer <jwt_access_token>`.
+
+---
+
+## 2. Module 1: Chat & Real-Time AI Stream
+
+Source: `backend/api/chat_router.py`  
+Engine: `backend/services/chat_service.py`
+
+### 2.1 `POST /chat/working-stream`
+Production endpoint used by the UI for real-time Server-Sent Events (SSE) streaming.
+
+- **Rate Limit**: Managed by `rate_limit_chat`.
+- **Request Headers**: `Content-Type: application/json`
 - **Request Body (`TestChatMessage`)**:
   ```json
   {
     "content": "give sms template",
-    "session_id": "sess_12345",
-    "user_id": "user_001",
+    "session_id": "848208a8-569b-4e0b-80ee-ee8624127da5",
+    "user_id": "vignesh@gmail.com",
     "role": "Chief Engineer",
-    "ship": "M/T Dolphin Pride",
+    "ship": "Sirius Pride",
     "ship_type": "Oil Tanker",
     "company": "Sirius Shipping",
     "skip_clarification": false
   }
   ```
-- **Internal Execution Flow**:
-  1. **User Resolution**: Checks Redis (`user:{user_id}`) or PostgreSQL (`SELECT * FROM users WHERE id = $1`) to extract `company_id` and assigned vessel.
-  2. **Fast-Path Intent Engine**:
-     - Fast greetings, thanks, goodbyes, and well-wishes bypass LLM rewriting (0.00s latency).
-     - Standalone verified marine technical terms bypass heavy intent routing.
-  3. **SMS Permit & Template Detector**:
-     - Scans for keywords matching `SPECIFIC_PERMIT_PATTERNS` (Hot Work SS 001, Cold Work SS 002, Enclosed Space SS 004, Bunkering Checklist E05) or general `DISCOVERY` (`"give sms template"`).
-     - When detected, retrieves the official company document or manual extract and formats clean markdown checklists.
-  4. **Parallel RAG Retrieval**:
-     - Concurrently queries FAISS course index (`retrieval_node`) and company document store (`company_retrieval_node`).
-  5. **SSE Stream Emission**:
-     - Emits `status` events: `{"type": "status", "stage": "thinking" | "fetching" | "generating"}`.
-     - Emits `content` tokens: `{"type": "content", "token": "..."}`.
-     - Emits `media` events: Diagrams, machinery schematics, video timestamp deep-links.
-     - Emits `suggestions`: Interactive follow-up question chips.
-     - Emits `done`: Finalization and session save signal.
+- **Response Format**: `text/event-stream` (Server-Sent Events)
+  ```
+  data: {"type": "status", "stage": "thinking", "message": "Dolphin is thinking..."}
+  
+  data: {"type": "content", "token": "### "}
+  data: {"type": "content", "token": "Hot "}
+  data: {"type": "content", "token": "Work "}
+  data: {"type": "content", "token": "Permit\n"}
+  
+  data: {"type": "media", "images": [{"title": "Hot Work Isolation", "url": "/dolphin/images/hw_01.jpg"}], "videos": []}
+  
+  data: {"type": "suggestions", "data": ["Enclosed Space Entry Permit", "Bunkering Safety Checklist"]}
+  
+  data: {"type": "done"}
+  ```
 
----
+### 2.2 `POST /chat`
+Synchronous endpoint returning a consolidated `NodeResponse` JSON payload.
 
-### Deep-Dive: `POST /chat`
-- **Purpose**: RESTful batch chat endpoint. Executes the complete graph pipeline and returns structured JSON containing sections, source chunks, videos, images, and metadata.
-- **Response Schema (`NodeResponse`)**:
+- **Request Body (`ChatMessage`)**:
+  ```json
+  {
+    "content": "Explain Main Engine Scavenge Fire actions",
+    "session_id": "848208a8-569b-4e0b-80ee-ee8624127da5",
+    "user_id": "user_001",
+    "category": "QUERY",
+    "skip_clarification": false
+  }
+  ```
+- **Response (`NodeResponse`)**:
   ```json
   {
     "type": "query",
-    "content": "Markdown formatted answer...",
+    "content": "### Immediate Actions for Scavenge Fire\n1. Reduce engine speed...",
     "sections": [
-      { "topic_code": "DGS-ENG-01", "topic_name": "Main Engine Scavenge Fire", "content": "..." }
+      {
+        "topic_code": "DGS-ENG-04",
+        "topic_name": "Scavenge Fires and Crankcase Explosions",
+        "content": "..."
+      }
     ],
-    "chunks_used": [102, 105],
-    "videos": [{ "title": "Scavenge Fire Procedure", "url": "/storage/videos/scavenge.mp4" }],
-    "images": [{ "title": "Relief Valve Diagram", "url": "/dolphin/images/valve.jpg" }],
-    "question_suggestions": ["What are the warning signs of a scavenge fire?", "Explain scavenge drain checks"],
-    "metadata": { "category": "QUERY", "latencies": { "total": 1.25 } }
+    "chunks_used": [142, 143],
+    "videos": [],
+    "images": [
+      {
+        "title": "Scavenge Relief Valve",
+        "url": "/dolphin/images/scavenge_relief.jpg"
+      }
+    ],
+    "question_suggestions": [
+      "What causes high scavenge temperatures?",
+      "How often should scavenge spaces be cleaned?"
+    ],
+    "metadata": {
+      "category": "QUERY",
+      "latencies": { "total": 1.18 }
+    }
   }
   ```
 
+### 2.3 `POST /chat/switch-session`
+Switches active session in Redis for the user.
+
+- **Query Parameters**: `session_id=str`
+- **Response**: `{"message": "Session switched"}`
+
 ---
 
-### Deep-Dive: `POST /chat/switch-session`
-- **Purpose**: Updates Redis active session pointer for a given user.
-- **Payload**: `{"session_id": "sess_9999"}`.
+## 3. Module 2: Authentication & User Access
 
----
+Source: `backend/api/login_router.py`  
+Source: `backend/api/logout_router.py`  
+Source: `backend/api/forgot_password.py`
 
-## 2. Authentication & Access Module
-
-Source File: `backend/api/login_router.py`  
-Source File: `backend/api/logout_router.py`  
-Source File: `backend/api/forgot_password.py`
-
-### Endpoints Overview
-
-| Method | Path | Summary | Description |
+| Method | Path | Request Body | Description |
 |---|---|---|---|
-| `POST` | `/login` | Main User Login | Validates user against CMS remote API or local DB, creates session, caches Redis profile |
-| `POST` | `/login/login1` | Login Alias | Alternate endpoint mapping for login integration |
-| `POST` | `/login/test-login` | Testing Login | Bypasses external remote CMS authentication for local automated testing |
-| `POST` | `/login/create` | Create User | Explicitly creates a user account with role, company, and ship attributes |
-| `GET` | `/login/usercourses/{user_id}` | Get User Courses | Fetches list of registered courses for user |
-| `POST` | `/login/usercourses/{user_id}` | Sync User Courses | Synchronizes user course assignments with CMS API |
-| `GET` | `/login/debug-db` | Database Schema Debug | Returns column definitions of the `users` PostgreSQL table |
-| `POST` | `/logout` | Logout | Invalidates active user session and clears cookies |
-| `POST` | `/forgot-password` | Password Recovery | Initiates password reset flow |
+| `POST` | `/login` | `LoginRequest` | Primary login; validates remote CMS token, creates/updates user in DB, caches Redis profile |
+| `POST` | `/login/login1` | `LoginRequest` | Route alias for legacy client integration |
+| `POST` | `/login/test-login` | `LoginRequest` | Sandbox login bypassing remote LMS API |
+| `POST` | `/login/create` | `UserCreate` | Direct user registration |
+| `GET` | `/login/usercourses/{user_id}` | None | Retrieves user's registered course codes from LMS API |
+| `POST` | `/login/usercourses/{user_id}` | None | Triggers sync of registered user courses |
+| `GET` | `/login/debug-db` | None | Lists PostgreSQL columns in table `public.users` |
+| `POST` | `/logout` | None | Clears `marine_user_id` and `marine_session_id` cookies |
+| `POST` | `/forgot-password` | `{"email": "..."}` | Password recovery request |
 
 ---
 
-### Key Workflow: `POST /login`
-1. Accepts email/username, password, role, company name, ship name, ship type.
-2. Checks CMS remote API (`COMPANY_COURSES_API_URL`) using security key.
-3. Automatically creates or updates record in PostgreSQL `public.users`.
-4. Saves user metadata into Redis with TTL:
-   - Key: `user:{user_id}`
-   - Contents: `id`, `name`, `email`, `role`, `company_name`, `company_id`, `ship_name`, `ship_type`, `user_courses`, `company_courses`.
-5. Sets HTTP-only cookies: `marine_user_id`, `marine_session_id`, `access_token`.
+## 4. Module 3: Company Documents & SMS Manuals
 
----
+Source: `backend/api/company_router.py`
 
-## 3. Company Documents & SMS Manuals Module
+### 4.1 `POST /companies/upload`
+Uploads Shipboard Safety Management System (SMS) manuals, permit formats, or checklists.
 
-Source File: `backend/api/company_router.py`  
-Service: `backend/services/company_services.py`  
-Extractor: `backend/services/document_extractor.py`
-
-### Endpoints Overview
-
-| Method | Path | Summary | Description |
-|---|---|---|---|
-| `POST` | `/companies/upload` | Upload Company Documents | Uploads SMS manuals, permit forms, checklists; parses text and indexes into FAISS |
-
----
-
-### Deep-Dive: `POST /companies/upload`
-- **Parameters**:
-  - `company_id` (Form parameter): Unique ID representing the shipping company (e.g. `824866`).
-  - `files` (Multipart form files): One or more `.docx`, `.pdf`, `.txt` files containing Shipboard SMS Manuals, Work Permits, or SOPs.
-- **Internal Processing**:
-  1. `extract_document_text`: Parses docx structure, extracts tables, form control fields, headers, and body paragraphs.
-  2. Stores document metadata and full text in PostgreSQL table `public.company_documents` (`document_id`, `company_id`, `document_title`, `document_content`, `is_active`).
-  3. Indexes document chunks into `CompanyDocumentStore` backed by `company_index.bin` FAISS vector store.
-- **Response**: `CompanyDocumentUploadResponse` with list of stored document IDs and titles.
-
----
-
-## 4. Sessions & Conversation History Module
-
-Source File: `backend/api/session_router.py`
-
-### Endpoints Overview
-
-| Method | Path | Summary | Description |
-|---|---|---|---|
-| `GET` | `/sessions` | List User Sessions | Returns all chat sessions belonging to the authenticated user |
-| `POST` | `/sessions` | Create New Session | Instantiates a new empty conversation session |
-| `GET` | `/sessions/{session_id}` | Get Session Details | Loads message history, topic title, and creation timestamps |
-| `DELETE` | `/sessions/{session_id}` | Delete Session | Deletes session from PostgreSQL and flushes Redis message cache |
-| `POST` | `/sessions/save/{session_id}` | Bookmark/Save Session | Toggles `is_saved` boolean on a session for quick retrieval |
-| `GET` | `/sessions/saved/{user_id}` | Get Saved Sessions | Fetches bookmarked sessions for user dashboard |
-| `POST` | `/sessions/message-feedback` | Record Message Rating | Saves thumbs-up / thumbs-down rating directly on a conversation turn |
-| `GET` | `/sessions/topic/{topic_code}` | Get Topic Content | Retrieves master curriculum text for a specific topic code |
-| `GET` | `/sessions/get_all/sessions/` | Admin: List All Sessions | Paginated administrative view of all historical sessions across all users |
-| `GET` | `/sessions/` | Filtered Sessions View | Administrative query endpoint with user ID, date range, and keyword filters |
-
----
-
-## 5. Quiz & Assessment Module
-
-Source File: `backend/api/quiz_router.py`  
-Pipeline: `backend/pipeline/quiz.py`
-
-### Endpoints Overview
-
-| Method | Path | Summary | Description |
-|---|---|---|---|
-| `POST` | `/quiz/generate` | Generate Quiz Questions | Creates dynamic multiple-choice assessment based on recent conversation topic |
-| `POST` | `/quiz/submit` | Submit Quiz Answers | Records user selections, computes score, and stores results |
-| `POST` | `/quiz/grade` | Grade Quiz & Give Feedback | Evaluates answers, provides correct options, and returns pedagogical explanations |
-
----
-
-### Deep-Dive: `POST /quiz/generate`
-- **Request Body**:
+- **Content-Type**: `multipart/form-data`
+- **Form Parameters**:
+  - `company_id` (str, required): Unique company identifier (e.g. `824866`).
+  - `files` (list of UploadFile, required): `.docx` or `.pdf` files.
+- **Workflow**:
+  1. Extracts text from paragraphs, tables, and form control fields via `extract_document_text`.
+  2. Inserts row into `public.company_documents` table.
+  3. Computes chunk embeddings and adds vectors into `company_index.bin` FAISS index.
+- **Response (`CompanyDocumentUploadResponse`)**:
   ```json
   {
-    "topic_code": "MARPOL-VI",
-    "topic_name": "Sulphur Emission Control Areas (SECA)",
-    "num_questions": 5,
-    "difficulty": "medium"
+    "company_id": "824866",
+    "documents": [
+      {
+        "document_id": "31",
+        "document_title": "Hot Work Permit SS 001.docx"
+      }
+    ]
   }
   ```
-- **Behavior**: Uses LLM with domain grounding from course chunks to generate realistic maritime scenario MCQs with 4 choices, question rationale, and correct option indicators.
 
 ---
 
-## 6. Course Synchronizer Module
+## 5. Module 4: Sessions & Conversation History
 
-Source File: `backend/course_sync/course_sync_router.py`
+Source: `backend/api/session_router.py`  
+Service: `backend/services/session_service.py`
 
 ### Endpoints Overview
 
 | Method | Path | Summary | Description |
 |---|---|---|---|
-| `POST` | `/sync/courses` | Sync Courses | Syncs active courses and topics from central MarinerSkills CMS |
-| `POST` | `/sync/masterData` | Sync Master Curriculum | Ingests all maritime competency frameworks and standards |
-| `POST` | `/sync/masterContent` | Sync Master Content | Downloads lesson text, images, and video mappings |
-| `POST` | `/sync/sync-course-content-excel` | Excel Course Ingestion | Uploads spreadsheet to bulk create or update course topics and media |
-| `POST` | `/sync/retry` | Retry Sync | Retries failed course synchronization jobs |
-| `POST` | `/sync/delete` | Delete Local Courses | Purges deleted courses from local tutor DB |
+| `GET` | `/sessions` | List Sessions | Returns sessions for current user from PostgreSQL |
+| `POST` | `/sessions` | Create Session | Creates new conversation session in DB and Redis |
+| `GET` | `/sessions/{session_id}` | Get Session Details | Returns complete message history for session |
+| `DELETE` | `/sessions/{session_id}` | Delete Session | Deletes session and clears Redis cache |
+| `POST` | `/sessions/save/{session_id}` | Bookmark Session | Toggles `is_saved` flag for user |
+| `GET` | `/sessions/saved/{user_id}` | Get Bookmarks | Lists saved sessions for user |
+| `POST` | `/sessions/message-feedback` | Message Rating | Stores thumbs up/down rating on turn |
+| `GET` | `/sessions/topic/{topic_code}` | Topic Lookup | Returns topic curriculum details from DB |
+| `GET` | `/sessions/get_all/sessions/` | All Sessions (Admin) | Admin view of all user sessions with email |
+| `GET` | `/sessions/` | Paginated Sessions | Filtered admin pagination (`limit`, `offset`, `search`, `all_users`) |
+
+### Key Response Model: `PaginatedSessionResponse`
+```json
+{
+  "total": 142,
+  "limit": 10,
+  "offset": 0,
+  "data": [
+    {
+      "id": "user_001",
+      "username": "vignesh",
+      "email": "vignesh@gmail.com",
+      "chat_title": "What are all the jobs for OOW in anchorage?",
+      "time": "2026-10-14T08:30:00Z",
+      "session_id": "d18dd289-7e37-45c9-a8c1-17bbfb53a8b2",
+      "chat_count": 6
+    }
+  ]
+}
+```
 
 ---
 
-## 7. Feedback, RLHF & DPO Module
+## 6. Module 5: Quiz & Assessment
 
-Source File: `backend/api/feedback_router.py`
+Source: `backend/api/quiz_router.py`
 
-This module provides human-in-the-loop review, dataset curation, and Direct Preference Optimization (DPO) preparation.
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/quiz/generate` | Generates 5 multiple-choice questions on specified topic with distractor choices |
+| `POST` | `/quiz/submit` | Accepts user answer selections and computes total score |
+| `POST` | `/quiz/grade` | Returns detailed explanations, correct answers, and learning advice |
 
-### Endpoints Overview
+---
 
-| Method | Path | Summary | Description |
+## 7. Module 6: Course Synchronization
+
+Source: `backend/course_sync/course_sync_router.py`
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/sync/courses` | Syncs active courses and topics from central MarinerSkills LMS API |
+| `POST` | `/sync/masterData` | Syncs curriculum competencies and course master catalog |
+| `POST` | `/sync/masterContent` | Downloads updated topic texts, videos, and figures |
+| `POST` | `/sync/sync-course-content-excel` | Ingests spreadsheet `.xlsx` file to populate course lessons |
+| `POST` | `/sync/retry` | Re-executes failed synchronization tasks |
+| `POST` | `/sync/delete` | Purges deleted courses from tutor database |
+
+---
+
+## 8. Module 7: Human Feedback & DPO Dataset
+
+Source: `backend/api/feedback_router.py`
+
+Total of **21 endpoints** dedicated to RLHF (Reinforcement Learning from Human Feedback), auditing, and model alignment:
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/feedback` | User submits thumbs up/down, tag reasons, and correction text |
+| `GET` | `/feedback/pending` | Moderator queue of unverified responses |
+| `GET` | `/feedback/approved` | High-confidence response memory for few-shot injection |
+| `GET` | `/feedback/dashboard` | Aggregated analytics (total ratings, acceptance rate, top topics) |
+| `GET` | `/feedback/counts` | Feedback counts by category |
+| `GET` | `/feedback/stats` | Performance statistics on answer quality |
+| `GET` | `/feedback/{id}` | Detailed inspection of single feedback record |
+| `POST` | `/feedback/{id}/approve` | Approves bot response |
+| `POST` | `/feedback/{id}/reject` | Rejects response (hallucination, factual error) |
+| `PUT` | `/feedback/{id}/approved` | Subject Matter Expert (SME) edits the ground-truth response |
+| `DELETE` | `/feedback/{id}/approved` | Removes item from approved memory |
+| `POST` | `/feedback/{id}/regenerate` | Triggers LLM re-generation with stricter temperature |
+| `PATCH` | `/feedback/{id}/review` | Updates reviewer notes |
+| `DELETE` | `/feedback/{id}` | Deletes feedback entry |
+| `DELETE` | `/feedback/session/{sess}/message/{msg}` | Purges feedback for specific turn |
+| `GET` | `/feedback/topics/search` | Topic search autocomplete |
+| `GET` | `/feedback/dpo/dataset` | Exports JSONL dataset (`prompt`, `chosen`, `rejected`) |
+| `POST` | `/feedback/dpo/jobs` | Dispatches background DPO export job |
+| `GET` | `/feedback/dpo/jobs` | Lists export job progress |
+
+---
+
+## 9. Module 8: Course Verification
+
+Source: `backend/api/course_router.py`
+
+### 9.1 `POST /course/check-topic-course`
+- **Request Body**: `{"topic_code": "DGS-ENG-01", "user_id": "vignesh"}`
+- **Purpose**: Verifies that the requested maritime lesson is included in the company or student's active license.
+
+---
+
+## 10. Module 9: User Administration
+
+Source: `backend/api/user_router.py`
+
+| Method | Path | Security | Description |
 |---|---|---|---|
-| `POST` | `/feedback` | Submit Feedback | Logs user feedback, thumbs rating, and correction notes on a bot response |
-| `GET` | `/feedback/pending` | List Pending Feedback | Moderator queue of unreviewed AI responses needing verification |
-| `GET` | `/feedback/approved` | List Approved QA Pairs | Curated high-quality responses approved for memory and fine-tuning |
-| `GET` | `/feedback/dashboard` | Feedback Dashboard | Complete summary stats (total, pending, approved, rejected, avg rating) |
-| `GET` | `/feedback/stats/counts` | Feedback Counts | Breakdown of feedback counts grouped by category |
-| `GET` | `/feedback/topics/search` | Topic Autocomplete | Searches topics linked to feedback entries |
-| `GET` | `/feedback/{feedback_id}` | Get Feedback by ID | Retrieves specific feedback item with original query and model response |
-| `POST` | `/feedback/{feedback_id}/approve` | Approve Response | Approves model answer; adds to high-confidence approved memory |
-| `POST` | `/feedback/{feedback_id}/reject` | Reject Response | Rejects response and marks reason (factual error, off-topic, hallucination) |
-| `PUT` | `/feedback/{feedback_id}/approved` | Edit Approved Response | Allows subject matter experts (SME) to edit and refine the approved response |
-| `DELETE` | `/feedback/{feedback_id}/approved` | Unapprove Response | Removes response from approved memory |
-| `POST` | `/feedback/{feedback_id}/regenerate` | Regenerate Answer | Re-queries the LLM with higher guidance to produce an alternate answer |
-| `PATCH` | `/feedback/{feedback_id}/review` | Update Review Status | Updates review notes and auditor metadata |
-| `DELETE` | `/feedback/{feedback_id}` | Delete Feedback | Deletes feedback record |
-| `DELETE` | `/feedback/session/{session_id}/message/{message_id}` | Delete Message Feedback | Purges feedback linked to specific session message |
-| `GET` | `/feedback/dpo/dataset` | Export DPO Dataset | Exports JSONL dataset with `prompt`, `chosen`, and `rejected` completions |
-| `POST` | `/feedback/dpo/jobs` | Trigger DPO Job | Starts a background fine-tuning or export preparation job |
-| `GET` | `/feedback/dpo/jobs` | List DPO Jobs | Checks status and progress of running DPO export jobs |
+| `GET` | `/users` | `require_super_admin` | Lists all users with assigned role, company ID, and vessel |
+| `PUT` | `/users/{user_id}/role` | `require_super_admin` | Updates user authorization role (`STUDENT`, `INSTRUCTOR`, `ADMIN`, `SUPER_ADMIN`) |
 
 ---
 
-## 8. Course Verification Module
+## 11. Module 10: Video Transcription
 
-Source File: `backend/api/course_router.py`
+Source: `backend/api/video_transcribe_router.py`
 
-### Endpoints Overview
+### 11.1 `POST /transcribe/video`
+- **Parameters**: `video_url`, `language`, `chunk_size_sec`.
+- **Behavior**: Downloads or streams maritime training video audio, generates timestamped transcript segments, and writes vectors to `transcribe_index.bin` for instant video retrieval in chat.
 
-| Method | Path | Summary | Description |
+---
+
+## 12. Module 11: Storage, Media & System Health
+
+Source: `backend/main.py`
+
+| Method | Path | Response Type | Description |
 |---|---|---|---|
-| `POST` | `/course/check-topic-course` | Check Topic Course Membership | Verifies if a queried topic belongs to any course registered by the user's company |
-
-- **Usage**: Used by frontend and chat routing to ensure users only access material covered under their subscribed curriculum packages.
-
----
-
-## 9. User Administration Module
-
-Source File: `backend/api/user_router.py`
-
-### Endpoints Overview
-
-| Method | Path | Summary | Description |
-|---|---|---|---|
-| `GET` | `/users` | List Users | Returns paginated list of all registered users with role and company |
-| `PUT` | `/users/{user_id}/role` | Update User Role | Assigns or modifies permissions (e.g. `student`, `instructor`, `admin`) |
+| `GET` | `/api/v1/health` | `JSON` | Database pool, Redis ping, FAISS ready state |
+| `GET` | `/api/v1/faiss/status` | `JSON` | Total vectors, memory usage, last rebuild timestamp |
+| `GET` | `/storage/{filepath}` | `FileResponse` | Serves machinery diagrams, videos, and PDFs from storage directory |
+| `GET` | `/dolphin/images/{filepath}` | `FileResponse` | CDN alias for lesson figures and equipment photos |
+| `GET` | `/pdf_images/{filepath}` | `FileResponse` | Serves images extracted from course PDFs |
+| `GET` | `/dolphin/pdf_thumbnail` | `FileResponse` | Returns thumbnail image for course PDF covers |
 
 ---
 
-## 10. Video Transcription Module
+## 13. Error Handling & HTTP Status Codes
 
-Source File: `backend/api/video_transcribe_router.py`
-
-### Endpoints Overview
-
-| Method | Path | Summary | Description |
-|---|---|---|---|
-| `POST` | `/transcribe/video` | Transcribe Video | Ingests audio from instructional videos, generates timestamped transcripts, and indexes segments into `transcribe_index.bin` |
-
----
-
-## 11. General & Storage Module
-
-Source File: `backend/main.py`
-
-### Endpoints Overview
-
-| Method | Path | Summary | Description |
-|---|---|---|---|
-| `GET` | `/api/v1/health` | System Health Check | Returns database status, Redis status, and service uptime |
-| `GET` | `/api/v1/faiss/status` | FAISS Index Health | Returns total indexed vectors, chunk counts, and memory footprint |
-| `GET` | `/storage/{filepath}` | Serve Storage File | Streams static machinery images, diagrams, and video assets |
-| `GET` | `/dolphin/images/{filepath}` | Media Alias | Canonical CDN alias for maritime equipment photographs |
-| `GET` | `/pdf_images/{filepath}` | PDF Diagram Extract | Delivers figures extracted from course PDF documents |
-| `GET` | `/dolphin/pdf_thumbnail` | PDF Thumbnail | Delivers thumbnail previews for training manual documents |
-
----
-
-## 🛡️ Security, Error Handling & Status Codes
-
-All endpoints adhere to standardized HTTP status responses:
-
-| Status Code | Condition |
-|---|---|
-| **`200 OK`** | Request succeeded. |
-| **`400 Bad Request`** | Missing required parameters (e.g. empty message `content`, missing file). |
-| **`401 Unauthorized`** | Missing or expired authentication token / cookie. |
-| **`403 Forbidden`** | Insufficient permissions (e.g. non-admin attempting `/users/{id}/role`). |
-| **`404 Not Found`** | Requested session, document, or feedback ID does not exist. |
-| **`429 Too Many Requests`** | SlowAPI rate limiter triggered (exceeded allowable requests per minute). |
-| **`500 Internal Server Error`** | Unhandled exception (logs detailed trace to Loguru). |
-
----
-
-> [!NOTE]
-> All chat endpoints (`/chat` and `/chat/working-stream`) run with real-time rate limiting managed by SlowAPI and Redis session caching to ensure low latency and high availability.
+| Status Code | Reason | Example Response |
+|---|---|---|
+| **`200 OK`** | Standard successful response | `{"status": "success", ...}` |
+| **`400 Bad Request`** | Validation failure or missing input | `{"detail": "Message required"}` |
+| **`401 Unauthorized`** | Missing or expired token / cookie | `{"detail": "Authentication credentials were not provided"}` |
+| **`403 Forbidden`** | User lacks required role permission | `{"detail": "Admin privileges required"}` |
+| **`404 Not Found`** | Requested resource doesn't exist | `{"detail": "Session sess_123 not found"}` |
+| **`429 Rate Limit`** | Exceeded request limit per minute | `{"error": "Rate limit exceeded: 60 per minute"}` |
+| **`500 Server Error`** | Uncaught exception logged to Loguru | `{"detail": "Internal server error"}` |
