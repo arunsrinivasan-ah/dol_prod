@@ -13,7 +13,11 @@ from loguru import logger
 from pydantic import BaseModel
 
 from graph.build_graph import build_graph
-from pipeline.company_retrieval import company_retrieval_node
+from pipeline.company_retrieval import (
+    company_retrieval_node,
+    get_company_template_catalog,
+    fetch_template_document_data,
+)
 from retrieval.faiss_store import DEFAULT_TOP_K, FAISSStore
 from retrieval.postgres_loader import PostgresLoader
 from services.embedding_config import EMBEDDING_DIM
@@ -27,6 +31,12 @@ from services.query_analyzer import (
 )
 from services.session_service import SessionService
 from services.suggestion_service import SuggestionService
+from services.clarification_service import (
+    ClarificationService,
+    parse_general_overview,
+    is_definitional_question,
+    definitional_term,
+)
 from models.node_response import NodeResponse
 from models.database import get_pool
 from services.gpt_intent_service import GPTIntentService
@@ -50,8 +60,9 @@ from fastapi import APIRouter, HTTPException
 from retrieval.faiss_store import FAISSStore
 from config import settings
 from services.image_service import ImageService
+from services.fuzzy_search_service import FuzzySearchService
 from services.pdf_service import pdf_service
-from pipeline.company_query import company_query_node
+from pipeline.company_query import company_query_node, company_template_query_node
 from services.maritime_acronyms import (
     find_acronyms_in_query,
     get_acronym_expansion,
@@ -64,6 +75,74 @@ from services.off_topic_detector import (
     is_marine_domain_query,
     is_obvious_marine_query,
 )
+
+# -------------------------------------------------------------
+# 📋 SMS FORM / PERMIT INTENT DETECTION
+# -------------------------------------------------------------
+SPECIFIC_PERMIT_PATTERNS = [
+    (r'\b(hot\s*work|ss\s*001|ss001)\b', 'Hot Work Permit'),
+    (r'\b(cold\s*work|ss\s*002|ss002)\b', 'Cold Work Permit'),
+    (r'\b(enclosed\s*space|confined\s*space|ss\s*004|ss004)\b', 'Enclosed Space Entry Permit'),
+    (r'\b(electrical\s*work|ss\s*003|ss003|isolation)\b', 'Electrical Work Permit'),
+    (r'\b(high\s*voltage)\b', 'High Voltage (Over 1000 V) Work Permit'),
+    (r'\b(height|overside)\b', 'Work At Height Overside Permit'),
+    (r'\b(crane|personnel\s*transfer)\b', 'Personnel Transfer Using Crane'),
+    (r'\b(underwater)\b', 'Underwater Operations Work Permit'),
+    (r'\b(adverse\s*weather|deck\s*access)\b', 'Work Access On Deck During Adverse Weather Permit'),
+    (r'\b(passenger\s*lift|elevator)\b', 'Work On Passenger Lift Equipment And Systems Permit'),
+    (r'\b(pressuri[sz]ed\s*pipeline|pipeline\s*equipment)\b', 'Work On Pressurised Pipelines Equipment Permit'),
+    (r'\b(bunkering|e05)\b', 'Bunkering Safety Checklist'),
+    (r'\b(familiaris\w*|familiariz\w*|ss\s*006|ss006)\b', 'Safety Familiarisation Checklist'),
+    (r'\b(risk\s*assessment|ra\s*001|ra001)\b', 'Risk Assessment Format'),
+    (r'\b(handing\s*over|taking\s*over|per\s*002|per002)\b', 'Handing Taking Over Report'),
+]
+
+TEMPLATE_INDICATORS = {'template', 'templates', 'form', 'forms', 'permit', 'permits', 'checklist', 'checklists', 'ptw', 'certificate', 'format'}
+
+def detect_sms_template_intent(query: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Returns (intent_type, template_target)
+    - ('SPECIFIC', 'Hot Work Permit'): user named a specific form/permit
+    - ('DISCOVERY', None): user asked generally for sms templates/forms/permits
+    - (None, None): not a template request
+    """
+    q = (query or '').strip().lower()
+    words = set(re.findall(r'\b\w+\b', q))
+    has_indicator = bool(words & TEMPLATE_INDICATORS)
+    has_sms = 'sms' in words or 'company' in words or 'safety management system' in q
+
+    EDUCATIONAL_PREFIXES = r'\b(what\s+is|what\s+are|how\s+to|how\s+do|why\s+is|why\s+do|explain|describe|difference\s+between|hazards\s+of|duties\s+of|precautions\s+for)\b'
+    is_educational = bool(re.search(EDUCATIONAL_PREFIXES, q))
+
+    if not is_educational:
+        for pattern, name in SPECIFIC_PERMIT_PATTERNS:
+            if re.search(pattern, q):
+                has_code = bool(re.search(r'\b(ss\s*00[1-6]|ss00[1-6]|ra\s*001|ra001|e05|per\s*002)\b', q))
+                if (
+                    has_indicator
+                    or has_code
+                    or any(w in q for w in ['give', 'show', 'need', 'want', 'get', 'download', 'sample', 'provide'])
+                    or len(q) <= 60
+                ):
+                    return ('SPECIFIC', name)
+
+    if (has_sms and has_indicator) or q in [
+        'sms template', 'sms templates', 'sms form', 'sms forms',
+        'permit templates', 'ptw templates', 'company template', 'company templates',
+        'give me sms template', 'what sms templates do you have'
+    ]:
+        return ('DISCOVERY', None)
+
+    # Dynamic fallback: matches any custom permit/checklist/form uploaded to company documents
+    # (e.g. user clicks or asks for a custom uploaded permit name not in the static pattern list)
+    if has_indicator and len(q) <= 70 and not is_educational:
+        cleaned = re.sub(r'^(give\s+me|show\s+me|i\s+need|i\s+want|provide|sample\s+of)\s+', '', q, flags=re.IGNORECASE).strip()
+        cleaned = re.sub(r'\s+(template|sample)$', '', cleaned, flags=re.IGNORECASE).strip()
+        if len(cleaned.split()) >= 2:
+            return ('SPECIFIC', cleaned.title())
+
+    return (None, None)
+
 
 def normalize_video_url(url: str) -> str:
     """
@@ -353,6 +432,17 @@ class ChatService:
         intent_service = GPTIntentService()
         self.analyzer = EnhancedQueryAnalyzer(intent_service)
 
+        # "Did you mean...?" for vague queries such as "temperature"
+        self.clarifier = ClarificationService(
+            openai_service=openai_service,
+            enabled=settings.enable_clarification,
+            use_llm=settings.clarification_use_llm,
+            max_options=settings.clarification_max_options,
+        )
+
+        # Fuzzy search & typo correction for misspelled maritime terms
+        self.fuzzy_search = FuzzySearchService(vector_store=self.vector_store)
+
         # Debug hook for tests and observability
         self._last_state: Dict[str, Any] | None = None
 
@@ -407,6 +497,8 @@ class ChatService:
                     normalized["question_suggestions"] = list(
                         raw.get("question_suggestions") or []
                     )
+                    if isinstance(raw.get("clarification"), dict):
+                        normalized["clarification"] = raw["clarification"]
                 cleaned.append(normalized)
                 continue
 
@@ -2392,6 +2484,132 @@ Rules:
         """
         return ""    
 
+    async def _maybe_brief_general_answer(self, query: str) -> Optional[Tuple[str, List[str]]]:
+        """
+        For a harmless 'what is X' question that the off-topic filter would refuse, answer in a few
+        words from general knowledge, bridge to maritime, and offer related course topics as buttons.
+        Returns (text, follow_up_questions) or None to keep the normal polite refusal.
+        """
+        from services.off_topic_detector import categorize_off_topic_query
+        if categorize_off_topic_query(query) != "general" or not is_definitional_question(query):
+            return None
+
+        term = definitional_term(query)
+        prompt = (
+            "You are Dolphin, a friendly maritime training tutor.\n"
+            f"The learner asked a general-knowledge question: \"{query}\"\n\n"
+            "Answer it directly from your own knowledge in 1-2 short sentences (about 40 words). "
+            "No web search, no sources, no headings.\n"
+            "Then add ONE short sentence linking it to ships or maritime work if there is a natural link; "
+            "otherwise warmly invite them to ask about maritime topics.\n"
+            "If the question asks for medical, legal or financial advice, or anything harmful, politely decline instead.\n"
+            "Tone: warm, conversational, concise (under 70 words in total)."
+        )
+
+        async def _answer() -> str:
+            return (await self.openai_service.chat(
+                [{"role": "user", "content": prompt}],
+                temperature=0.3,
+                category="GENERAL_BRIEF",
+                max_tokens=180,
+            ) or "").strip()
+
+        async def _related_topics() -> List[str]:
+            try:
+                chunks, _ = await self._retrieve_chunks(term)
+            except Exception:
+                return []
+            seen, out = set(), []
+            for ch in chunks:
+                name = str((ch or {}).get("topic_name") or "").strip()
+                key = re.sub(r"\W+", " ", name.lower()).strip()
+                if name and key not in seen and not (ch or {}).get("_is_sme_approved"):
+                    seen.add(key)
+                    out.append(f"Tell me about {name}")
+                if len(out) >= 3:
+                    break
+            return out
+
+        try:
+            text, topics = await asyncio.gather(_answer(), _related_topics())
+        except Exception:
+            logger.exception("Brief general answer failed")
+            return None
+        if not text or text.startswith("I apologize, but I encountered an error"):
+            return None
+
+        followups = [f"How does {term} matter on ships?"] + topics
+        logger.info(f"💬 [General Brief] answered '{query}' in a few words + {len(topics)} related course topics")
+        return text, followups[:4]
+
+    async def _general_overview_answer(self, term: str) -> str:
+        """Short, friendly overview from the model's own knowledge (no retrieval, no web)."""
+        prompt = (
+            "You are Dolphin, a friendly maritime training tutor.\n"
+            f"The learner asked for a GENERAL OVERVIEW of: \"{term}\".\n\n"
+            "Answer from your own general knowledge (do not search or cite the web, do not mention sources).\n"
+            "- Start with a one-sentence plain-English definition.\n"
+            "- Then at most 3 short bullet points with the key ideas, units or types.\n"
+            "- Add one short line on why it matters on ships / in maritime work.\n"
+            "- Keep it under 90 words in total, warm and conversational, using simple Markdown.\n"
+            "- Finish with a short inviting line saying they can pick a course topic below to go deeper."
+        )
+        try:
+            text = await self.openai_service.chat(
+                [{"role": "user", "content": prompt}],
+                temperature=0.3,
+                category="GENERAL_OVERVIEW",
+                max_tokens=300,
+            )
+            text = (text or "").strip()
+            if text and not text.startswith("I apologize, but I encountered an error"):
+                return text
+        except Exception:
+            logger.exception("General overview generation failed")
+        return (
+            f"I'd be happy to give you an overview of **{term}**, but I couldn't reach my knowledge "
+            f"base just now. Please try again in a moment, or pick one of the course topics below."
+        )
+
+    async def _handle_typo_correction(
+        self,
+        typo_match: Dict[str, Any],
+        state: Dict[str, Any],
+        stream_callback=None,
+    ) -> Dict[str, Any]:
+        """
+        Stream friendly 'Did you mean...?' typo message and set related topic suggestions.
+        """
+        typo_text = typo_match["message"]
+        typo_suggestions = typo_match.get("related_topics") or []
+
+        if stream_callback:
+            try:
+                for tok in re.findall(r'\S+\s*|\n+', typo_text):
+                    await stream_callback({"type": "content", "token": tok})
+                state["_streamed_live"] = True
+            except Exception as stream_err:
+                logger.warning(f"Failed streaming typo clarification: {stream_err}")
+
+        state["node_response"] = {
+            "type": "query",
+            "content": typo_text,
+            "sections": [],
+            "chunks_used": [],
+            "videos": [],
+            "images": [],
+            "pdfs": [],
+            "question_suggestions": typo_suggestions,
+            "metadata": {
+                "routing_reason": "typo_correction",
+                "category": "QUERY",
+            },
+        }
+        state["retrieval_chunks"] = []
+        state["video_suggestions"] = []
+        state["company_answer"] = None
+        return state
+
     async def run_chat(
         self,
         user_id: str,
@@ -2402,7 +2620,7 @@ Rules:
         user_details: dict | None = None,
         status_callback: Optional[Any] = None,
         stream_callback: Optional[Any] = None,
-        **kwargs,
+        skip_clarification: bool = False,
     ) -> Tuple[NodeResponse, List[Dict[str, Any]], str, str, Dict[str, Any]]:
 
         logger.info("Running chat pipeline")
@@ -2425,6 +2643,35 @@ Rules:
             for msg in cleaned_messages
             if isinstance(msg, dict) and msg.get("role") == "user"
         ]
+
+        # -----------------------------
+        #  "DID YOU MEAN...?" - resolve a typed reply ("2", "cargo", "general")
+        #  to the clarification the assistant asked on the previous turn
+        # -----------------------------
+        clarification: Optional[Any] = None
+        general_term: Optional[str] = None
+        user_declined_clarification = False
+        pending_clarification = self.clarifier.pending_from_messages(cleaned_messages)
+        if pending_clarification and not skip_clarification:
+            chosen_option = self.clarifier.resolve_reply(current_query, pending_clarification)
+            if chosen_option:
+                if chosen_option.get("kind") == "declined":
+                    logger.info(f"[CLARIFY] User declined clarification with '{current_query}'")
+                    user_declined_clarification = True
+                    skip_clarification = True
+                else:
+                    logger.info(
+                        f"[CLARIFY] Reply '{current_query}' resolved to option "
+                        f"{chosen_option.get('id')} -> '{chosen_option.get('query')}'"
+                    )
+                    current_query = chosen_option["query"]
+                    skip_clarification = True
+                    if chosen_option.get("kind") == "general":
+                        general_term = parse_general_overview(current_query)
+
+        # "General overview of X" picked from the buttons -> answer from general knowledge
+        if general_term is None and skip_clarification:
+            general_term = parse_general_overview(current_query)
 
         # -----------------------------
         #  FAST-PATH GREETING & SOCIAL INTENT DETECTION
@@ -2485,12 +2732,25 @@ Rules:
             except Exception:
                 pass
 
+        # Guard against polysemous dual-meaning terms blindly taking is_direct_marine fast path
+        is_polysemous = False
+        POLYSEMOUS_WORDS = {"squat", "draft", "draught", "bridge", "tank", "ships", "ship", "watch"}
+        matched_poly = [m for m in POLYSEMOUS_WORDS if re.search(r'\b' + re.escape(m) + r'\b', q_lower)]
+        if matched_poly and not is_obvious_marine_query(current_query):
+            has_maritime_context = bool(re.search(
+                r"\b(ship\s+squat|ship\s+draft|ship\s+draught|vessel|vessels|shipboard|navigation|shallow\s*water|under\s*keel|ukc|hydrodynamic|cargo|engine|deck|ballast|seafarer|seafarers|moor|mooring|anchor|anchoring|colreg|colregs|solas|marpol)\b",
+                q_lower,
+            ))
+            if not has_maritime_context:
+                is_polysemous = True
+
         is_direct_marine = (
             not simple_social
             and not is_quiz_or_summary
             and not has_coreference
             and not is_followup_starter
             and not is_off_topic_query(current_query)
+            and not is_polysemous
             and (
                 is_obvious_marine_query(current_query)
                 or is_marine_domain_query(current_query)
@@ -2498,7 +2758,22 @@ Rules:
             )
         )
 
-        if simple_social:
+        if general_term:
+            standalone_query = current_query
+            node_type = "query"
+            user_category = "QUERY"
+            router_decision = {
+                "node_type": "query",
+                "short_topic": general_term,
+                "reason": f"General overview requested via clarification: {general_term}",
+                "user_name": None,
+                "category": "QUERY",
+                "standalone_query": current_query,
+            }
+            latencies["query_rewrite"] = 0.0
+            latencies["router_classify"] = 0.0
+            logger.info(f"💡 [General Overview] '{general_term}' -> answering from general knowledge")
+        elif simple_social:
             social_intent_map = {
                 "GREETING": ("greeting", "GREETING"),
                 "GOODBYE": ("goodbye", "GOODBYE"),
@@ -2571,7 +2846,7 @@ Rules:
             )
 
             # Guard: If router mistakenly classified a technical term / machinery query as social or off-topic, override to query
-            if is_tech_term and not simple_social and not is_off_topic_query(current_query):
+            if is_tech_term and not simple_social and not is_off_topic_query(current_query) and not is_polysemous:
                 if node_type in ("goodbye", "greeting", "fallback", "negative", "off_topic") or router_decision.get("category") == "OFF_TOPIC":
                     logger.info(f"⚡ Overriding false router node_type '{node_type}' to 'query' for technical term: '{current_query}'")
                     node_type = "query"
@@ -2654,7 +2929,11 @@ Rules:
                 except Exception as e:
                     logger.warning(f"Status callback failed: {e}")
 
-            if is_off_topic_query(current_query) or is_off_topic_query(standalone_query):
+            if general_term:
+                retrieval_chunks = []
+                video_suggestions = []
+                sme_checked = False
+            elif is_off_topic_query(current_query) or is_off_topic_query(standalone_query):
                 logger.info("OFF TOPIC QUESTION DETECTED BEFORE RETRIEVAL")
                 retrieval_chunks = []
                 video_suggestions = []
@@ -2674,7 +2953,76 @@ Rules:
             retrieval_chunks = []
             video_suggestions = []
             sme_checked = False
-            
+
+        # -----------------------------
+        # 🤔 DID YOU MEAN...?  (vague one/two-word queries such as "temperature")
+        # Runs on the retrieval results we already have, so it costs no extra search.
+        # -----------------------------
+        logger.info(
+            f"[CLARIFY] gate: node_type={node_type} social={is_social} skip={skip_clarification} "
+            f"chunks={len(retrieval_chunks)} quiz_or_summary={is_quiz_or_summary} "
+            f"coref={has_coreference} followup={is_followup_starter}"
+        )
+        if (
+            node_type == "query"
+            and not is_social
+            and not skip_clarification
+            and not detect_sms_template_intent(current_query)[0]
+            and retrieval_chunks
+            and not is_quiz_or_summary
+            and not has_coreference
+            and not is_followup_starter
+            and not is_off_topic_query(current_query)
+        ):
+            try:
+                history_topic_codes = [
+                    c.get("topic_code")
+                    for c in (checkpoint_state.get("last_query_chunks") or [])
+                    if isinstance(c, dict)
+                ]
+                try:
+                    all_topic_names = self.vector_store.get_all_topic_names()
+                except Exception:
+                    all_topic_names = []
+                clarification = await self.clarifier.maybe_clarify(
+                    current_query,
+                    retrieval_chunks,
+                    all_topic_names,
+                    history_topic_codes=history_topic_codes,
+                )
+                if clarification:
+                    logger.info(
+                        f"[CLARIFY] '{current_query}' is ambiguous -> asking user "
+                        f"({len(clarification.options)} options)"
+                    )
+                    retrieval_chunks = []
+                    video_suggestions = []
+            except Exception:
+                logger.exception("[CLARIFY] clarification check failed; continuing normally")
+                clarification = None
+
+        # Check for misspelled maritime words / typos
+        typo_match = None
+        if (
+            node_type == "query"
+            and not is_social
+            and not general_term
+            and clarification is None
+            and not is_quiz_or_summary
+        ):
+            try:
+                try:
+                    all_topic_names = self.vector_store.get_all_topic_names()
+                except Exception:
+                    all_topic_names = []
+                typo_match = self.fuzzy_search.detect_misspelled_query(current_query, all_topic_names)
+                if typo_match:
+                    logger.info(f"💡 [Typo Detection] Found typo: {typo_match['misspelled_word']} -> {typo_match['corrected_term']}")
+                    retrieval_chunks = []
+                    video_suggestions = []
+            except Exception as e:
+                logger.debug(f"Typo check skipped on error: {e}")
+
         video_suggestions = self._normalize_video_suggestions(
             video_suggestions
         )
@@ -2737,11 +3085,144 @@ Rules:
                 state[key] = [state[key]]
 
 
+        soft_general: Optional[Tuple[str, List[str]]] = None
+        if (
+            node_type == "query"
+            and not general_term
+            and clarification is None
+            and settings.enable_general_brief
+            and (
+                is_off_topic_query(current_query)
+                or is_off_topic_query(standalone_query)
+                or (
+                    (user_category == "OFF_TOPIC" or router_decision.get("category") == "OFF_TOPIC")
+                    and not is_tech_term
+                    and not is_marine_domain_query(current_query)
+                    and not is_marine_domain_query(standalone_query)
+                )
+            )
+        ):
+            if status_callback:
+                try:
+                    await status_callback("generating", "Dolphin is generating response...")
+                except Exception as e:
+                    logger.warning(f"Status callback failed: {e}")
+            soft_general = await self._maybe_brief_general_answer(current_query or standalone_query)
+
         try:
 
             if node_type == "query":
 
-                if (
+                if general_term:
+                    overview_text = await self._general_overview_answer(general_term)
+                    topic_followups = [
+                        o.get("query") for o in ((pending_clarification or {}).get("options") or [])
+                        if o.get("kind") == "topic" and o.get("query")
+                    ][:4]
+                    if not topic_followups:
+                        try:
+                            topic_followups = self.suggestion_service.generate(
+                                query=general_term, chunks=[], history=[],
+                                short_topic=general_term, category="QUERY",
+                            )
+                        except Exception:
+                            topic_followups = []
+
+                    if stream_callback:
+                        try:
+                            for tok in re.findall(r'\S+\s*|\n+', overview_text):
+                                await stream_callback({"type": "content", "token": tok})
+                            state["_streamed_live"] = True
+                        except Exception as stream_err:
+                            logger.warning(f"Failed streaming general overview: {stream_err}")
+
+                    state["node_response"] = {
+                        "type": "query",
+                        "content": overview_text,
+                        "sections": [],
+                        "chunks_used": [],
+                        "videos": [],
+                        "images": [],
+                        "pdfs": [],
+                        "question_suggestions": topic_followups,
+                        "metadata": {
+                            "routing_reason": "general_overview",
+                            "general_overview": True,
+                            "category": "QUERY",
+                        },
+                    }
+                    state["retrieval_chunks"] = []
+                    state["video_suggestions"] = []
+                    state["company_answer"] = None
+
+                elif soft_general:
+                    brief_text, brief_followups = soft_general
+
+                    if stream_callback:
+                        try:
+                            for tok in re.findall(r'\S+\s*|\n+', brief_text):
+                                await stream_callback({"type": "content", "token": tok})
+                            state["_streamed_live"] = True
+                        except Exception as stream_err:
+                            logger.warning(f"Failed streaming brief answer: {stream_err}")
+
+                    state["node_response"] = {
+                        "type": "query",
+                        "content": brief_text,
+                        "sections": [],
+                        "chunks_used": [],
+                        "videos": [],
+                        "images": [],
+                        "pdfs": [],
+                        "question_suggestions": brief_followups,
+                        "metadata": {
+                            "routing_reason": "general_brief",
+                            "general_overview": True,
+                            "category": "QUERY",
+                        },
+                    }
+                    state["retrieval_chunks"] = []
+                    state["video_suggestions"] = []
+                    state["company_answer"] = None
+
+                elif clarification is not None:
+                    clar_text = clarification.render_text()
+                    clar_payload = clarification.to_dict()
+
+                    if stream_callback:
+                        try:
+                            for tok in re.findall(r'\S+\s*|\n+', clar_text):
+                                await stream_callback({"type": "content", "token": tok})
+                            state["_streamed_live"] = True
+                        except Exception as stream_err:
+                            logger.warning(f"Failed streaming clarification: {stream_err}")
+
+                    state["node_response"] = {
+                        "type": "query",
+                        "content": clar_text,
+                        "sections": [],
+                        "chunks_used": [],
+                        "videos": [],
+                        "images": [],
+                        "pdfs": [],
+                        # Legacy UIs only know about suggestion chips: give them
+                        # fully-specified queries so a click still resolves the ambiguity.
+                        "question_suggestions": clarification.suggestion_queries(),
+                        "metadata": {
+                            "routing_reason": "clarification",
+                            "needs_clarification": True,
+                            "clarification": clar_payload,
+                            "category": "QUERY",
+                        },
+                    }
+                    state["retrieval_chunks"] = []
+                    state["video_suggestions"] = []
+                    state["company_answer"] = None
+
+                elif typo_match is not None:
+                    state = await self._handle_typo_correction(typo_match, state, stream_callback)
+
+                elif (
                     is_off_topic_query(current_query)
                     or is_off_topic_query(standalone_query)
                     or (
@@ -2754,109 +3235,260 @@ Rules:
 
                     logger.info("🚫 OFF TOPIC QUESTION DETECTED")
 
-                    from services.off_topic_detector import generate_dynamic_off_topic_response
-                    out_of_scope_text, dynamic_suggestions = await generate_dynamic_off_topic_response(
-                        current_query or standalone_query
-                    )
+                    # Check for cross-domain overlap before purely refusing!
+                    try:
+                        all_names = self.vector_store.get_all_topic_names()
+                    except Exception:
+                        all_names = []
+                    overlap = self.clarifier.detect_cross_domain_overlap(current_query, all_names)
+                    typo_fallback = self.fuzzy_search.detect_misspelled_query(current_query, all_names)
+                    if overlap:
+                        overlap_term, maritime_label, target_query = overlap
+                        logger.info(f"💡 [Cross-Domain Overlap] Detected '{overlap_term}' -> '{maritime_label}' for query '{current_query}'")
+                        clar_text, clar_payload = self.clarifier.build_cross_domain_text_clarification(
+                            current_query, overlap_term, maritime_label, target_query
+                        )
+                        if stream_callback:
+                            try:
+                                for tok in re.findall(r'\S+\s*|\n+', clar_text):
+                                    await stream_callback({"type": "content", "token": tok})
+                                state["_streamed_live"] = True
+                            except Exception as stream_err:
+                                logger.warning(f"Failed streaming cross-domain clarification: {stream_err}")
 
-                    if stream_callback:
-                        try:
-                            tokens = re.findall(r'\S+\s*|\n+', out_of_scope_text)
-                            for tok in tokens:
-                                await stream_callback({"type": "content", "token": tok})
-                            state["_streamed_live"] = True
-                        except Exception as stream_err:
-                            logger.warning(f"Failed streaming off-topic response: {stream_err}")
-
-                    state["node_response"] = {
-                        "type": "query",
-                        "content": out_of_scope_text,
-                        "sections": [
-                            {
-                                "topic_code": "",
-                                "topic_name": "",
-                                "content": out_of_scope_text,
-                            }
-                        ],
-                        "chunks_used": [],
-                        "videos": [],
-                        "images": [],
-                        "pdfs": [],
-                        "question_suggestions": dynamic_suggestions,
-                        "metadata": {
-                            "routing_reason": "off_topic",
-                            "out_of_scope": True,
+                        state["node_response"] = {
+                            "type": "query",
+                            "content": clar_text,
+                            "sections": [],
+                            "chunks_used": [],
+                            "videos": [],
+                            "images": [],
+                            "pdfs": [],
+                            # NO TAP BUTTONS - user confirms through typing in chat
+                            "question_suggestions": [],
+                            "metadata": {
+                                "routing_reason": "cross_domain_clarification",
+                                "needs_clarification": True,
+                                "clarification": clar_payload,
+                                "category": "QUERY",
+                            },
                         }
-                    }
-                    state["retrieval_chunks"] = []
+                        state["retrieval_chunks"] = []
+                        state["video_suggestions"] = []
+                        state["company_answer"] = None
+                    elif typo_fallback:
+                        state = await self._handle_typo_correction(typo_fallback, state, stream_callback)
+                    else:
+                        from services.off_topic_detector import generate_dynamic_off_topic_response
+                        out_of_scope_text, dynamic_suggestions = await generate_dynamic_off_topic_response(
+                            current_query or standalone_query
+                        )
+
+                        if stream_callback:
+                            try:
+                                tokens = re.findall(r'\S+\s*|\n+', out_of_scope_text)
+                                for tok in tokens:
+                                    await stream_callback({"type": "content", "token": tok})
+                                state["_streamed_live"] = True
+                            except Exception as stream_err:
+                                logger.warning(f"Failed streaming off-topic response: {stream_err}")
+
+                        state["node_response"] = {
+                            "type": "query",
+                            "content": out_of_scope_text,
+                            "sections": [
+                                {
+                                    "topic_code": "",
+                                    "topic_name": "",
+                                    "content": out_of_scope_text,
+                                }
+                            ],
+                            "chunks_used": [],
+                            "videos": [],
+                            "images": [],
+                            "pdfs": [],
+                            "question_suggestions": dynamic_suggestions,
+                            "metadata": {
+                                "routing_reason": "off_topic",
+                                "out_of_scope": True,
+                            }
+                        }
+                        state["retrieval_chunks"] = []
                     state["video_suggestions"] = []
                     state["company_answer"] = None
 
                 else:
 
-                    # 🚀 STRATEGY 3: Parallelize Company & Course Retrieval
-                    t_ret_start = time.perf_counter()
-                    user_comp_id = (state.get("user_profile") or {}).get("company_id")
-                    if user_comp_id:
-                        logger.info("⚡ Concurrently executing Course and Company Retrieval nodes")
-                        course_task = asyncio.create_task(
-                            retrieval_node(state, self.vector_store, None)
+                    # -------------------------------------------------------------
+                    # 📋 SMS FORM / PERMIT TEMPLATE HANDLING
+                    # -------------------------------------------------------------
+                    sms_intent, sms_target = detect_sms_template_intent(current_query)
+                    user_prof = state.get("user_profile") or {}
+                    user_comp_id = user_prof.get("company_id")
+                    user_ship_type = (user_prof.get("ship_type") or "").strip()
+                    user_ship_name = user_prof.get("ship_name") or user_prof.get("ship") or "[ Vessel Name ]"
+
+                    if sms_intent == "DISCOVERY" and user_comp_id:
+                        logger.info(f"📋 SMS Template DISCOVERY: company={user_comp_id}, vessel={user_ship_name} ({user_ship_type})")
+                        pool = await self.session_service._get_pool()
+                        catalog = await get_company_template_catalog(pool, user_comp_id, user_ship_type)
+
+                        if catalog:
+                            catalog_lines = [
+                                f"Here are the official SMS templates and permits available for **{user_ship_name}** ({user_ship_type or 'Fleet'}):",
+                                "",
+                                "### 📋 Available Permits & Checklists:",
+                            ]
+                            for idx, (name, _) in enumerate(catalog, 1):
+                                catalog_lines.append(f"{idx}. **{name}**")
+                            catalog_lines.append("")
+                            catalog_lines.append("Tap any of the suggestions below to load that template directly.")
+                            catalog_text = "\n".join(catalog_lines)
+                            suggestions = [item[0] for item in catalog[:6]]
+                        else:
+                            catalog_text = f"No specific SMS templates found in documentation for **{user_ship_name}**. Please ensure company SMS manuals are uploaded."
+                            suggestions = []
+
+                        if stream_callback:
+                            try:
+                                for tok in re.findall(r'\S+\s*|\n+', catalog_text):
+                                    await stream_callback({"type": "content", "token": tok})
+                                state["_streamed_live"] = True
+                            except Exception as stream_err:
+                                logger.warning(f"Failed streaming catalog: {stream_err}")
+
+                        state["node_response"] = {
+                            "type": "query",
+                            "content": catalog_text,
+                            "sections": [],
+                            "chunks_used": [],
+                            "videos": [],
+                            "images": [],
+                            "pdfs": [],
+                            "question_suggestions": suggestions,
+                            "metadata": {
+                                "routing_reason": "sms_template_discovery",
+                                "is_sms_template_discovery": True,
+                                "category": "QUERY",
+                            },
+                        }
+                        state["retrieval_chunks"] = []
+                        state["video_suggestions"] = []
+                        state["company_answer"] = None
+
+                    elif sms_intent == "SPECIFIC" and user_comp_id and sms_target:
+                        logger.info(f"📋 SPECIFIC SMS Template: '{sms_target}' for vessel={user_ship_name} ({user_ship_type})")
+                        if status_callback:
+                            try:
+                                await status_callback("generating", f"Retrieving {sms_target} template...")
+                            except Exception as e:
+                                logger.warning(f"Status callback failed: {e}")
+
+                        pool = await self.session_service._get_pool()
+                        doc_title, doc_content = await fetch_template_document_data(
+                            pool, user_comp_id, user_ship_type, sms_target
                         )
-                        company_task = asyncio.create_task(
-                            company_retrieval_node(state, self.company_vector_store)
-                        )
-                        state_res, state_comp = await asyncio.gather(course_task, company_task)
-                        state = state_res
-                        state["company_chunks"] = state_comp.get("company_chunks", [])
+
+                        if doc_content:
+                            state["company_chunks"] = [{"content": doc_content, "document_title": doc_title}]
+                            state["template_document_title"] = doc_title or sms_target
+                            state = await company_template_query_node(state, self.openai_service)
+                            template_ans = state.get("company_answer") or ""
+                        else:
+                            template_ans = f"Sorry, the specific template for **{sms_target}** could not be found in the SMS documents for **{user_ship_name}**."
+
+                        if stream_callback and template_ans:
+                            try:
+                                for tok in re.findall(r'\S+\s*|\n+', template_ans):
+                                    await stream_callback({"type": "content", "token": tok})
+                                state["_streamed_live"] = True
+                            except Exception as stream_err:
+                                logger.warning(f"Failed streaming template: {stream_err}")
+
+                        state["node_response"] = {
+                            "type": "query",
+                            "content": template_ans,
+                            "sections": [],
+                            "chunks_used": [],
+                            "videos": [],
+                            "images": [],
+                            "pdfs": [],
+                            # CRITICAL: User knows the template name, so DO NOT give suggestion chips!
+                            "question_suggestions": [],
+                            "metadata": {
+                                "routing_reason": "sms_template_specific",
+                                "is_sms_template": True,
+                                "category": "QUERY",
+                            },
+                        }
+                        state["retrieval_chunks"] = []
+                        state["video_suggestions"] = []
+                        state["company_answer"] = None
+
                     else:
-                        state = await retrieval_node(
-                            state,
-                            self.vector_store,
-                            None
-                        )
-                        state["company_chunks"] = []
+                        # 🚀 STRATEGY 3: Parallelize Company & Course Retrieval
+                        t_ret_start = time.perf_counter()
+                        user_comp_id = (state.get("user_profile") or {}).get("company_id")
+                        if user_comp_id:
+                            logger.info("⚡ Concurrently executing Course and Company Retrieval nodes")
+                            course_task = asyncio.create_task(
+                                retrieval_node(state, self.vector_store, None)
+                            )
+                            company_task = asyncio.create_task(
+                                company_retrieval_node(state, self.company_vector_store)
+                            )
+                            state_res, state_comp = await asyncio.gather(course_task, company_task)
+                            state = state_res
+                            state["company_chunks"] = state_comp.get("company_chunks", [])
+                        else:
+                            state = await retrieval_node(
+                                state,
+                                self.vector_store,
+                                None
+                            )
+                            state["company_chunks"] = []
 
-                    dur_ret = time.perf_counter() - t_ret_start
-                    latencies["retrieval_node"] = dur_ret
-                    latencies["company_retrieval"] = dur_ret if user_comp_id else 0.0
-                    logger.info(f"⏱️ [Timer] Concurrent Course & Company Retrieval: {dur_ret:.2f}s")
+                        dur_ret = time.perf_counter() - t_ret_start
+                        latencies["retrieval_node"] = dur_ret
+                        latencies["company_retrieval"] = dur_ret if user_comp_id else 0.0
+                        logger.info(f"⏱️ [Timer] Concurrent Course & Company Retrieval: {dur_ret:.2f}s")
 
-                    if status_callback:
-                        try:
-                            await status_callback("generating", "Dolphin is generating response...")
-                        except Exception as e:
-                            logger.warning(f"Status callback failed: {e}")
+                        if status_callback:
+                            try:
+                                await status_callback("generating", "Dolphin is generating response...")
+                            except Exception as e:
+                                logger.warning(f"Status callback failed: {e}")
 
-                    # Parallelize query_node and company_query_node if company_chunks exist
-                    t_gen = time.perf_counter()
-                    if state.get("company_chunks"):
-                        course_task = asyncio.create_task(
-                            query_node(
+                        # Parallelize query_node and company_query_node if company_chunks exist
+                        t_gen = time.perf_counter()
+                        if state.get("company_chunks"):
+                            course_task = asyncio.create_task(
+                                query_node(
+                                    state,
+                                    self.openai_service,
+                                    self.suggestion_service,
+                                    self.vector_store,
+                                )
+                            )
+                            company_task = asyncio.create_task(
+                                company_query_node(
+                                    state,
+                                    self.openai_service,
+                                )
+                            )
+                            state_res, comp_res = await asyncio.gather(course_task, company_task)
+                            state = state_res
+                            state["company_answer"] = comp_res.get("company_answer")
+                        else:
+                            state = await query_node(
                                 state,
                                 self.openai_service,
                                 self.suggestion_service,
                                 self.vector_store,
                             )
-                        )
-                        company_task = asyncio.create_task(
-                            company_query_node(
-                                state,
-                                self.openai_service,
-                            )
-                        )
-                        state_res, comp_res = await asyncio.gather(course_task, company_task)
-                        state = state_res
-                        state["company_answer"] = comp_res.get("company_answer")
-                    else:
-                        state = await query_node(
-                            state,
-                            self.openai_service,
-                            self.suggestion_service,
-                            self.vector_store,
-                        )
-                        state["company_answer"] = None
-                    latencies["answer_generation"] = time.perf_counter() - t_gen
-                    logger.info(f"⏱️ [Timer] Answer Generation (OpenAI LLM): {latencies['answer_generation']:.2f}s")
+                            state["company_answer"] = None
+                        latencies["answer_generation"] = time.perf_counter() - t_gen
+                        logger.info(f"⏱️ [Timer] Answer Generation (OpenAI LLM): {latencies['answer_generation']:.2f}s")
 
             elif node_type == "greeting":
 
@@ -2884,18 +3516,84 @@ Rules:
                 state = await negative_node(state)
 
             else:
-
-                if status_callback:
+                if user_declined_clarification:
+                    decline_msg = "Understood! Let me know if you have any questions related to maritime navigation, marine engineering, cargo operations, or vessel safety."
+                    if stream_callback:
+                        try:
+                            for tok in re.findall(r'\S+\s*|\n+', decline_msg):
+                                await stream_callback({"type": "content", "token": tok})
+                            state["_streamed_live"] = True
+                        except Exception:
+                            pass
+                    state["node_response"] = {
+                        "type": "query",
+                        "content": decline_msg,
+                        "sections": [],
+                        "chunks_used": [],
+                        "videos": [],
+                        "images": [],
+                        "pdfs": [],
+                        "question_suggestions": [],
+                        "metadata": {"category": "FALLBACK"},
+                    }
+                    state["retrieval_chunks"] = []
+                    state["video_suggestions"] = []
+                    state["company_answer"] = None
+                else:
+                    # Check for cross-domain overlap or typos before purely falling back
                     try:
-                        await status_callback("generating", "Dolphin is generating response...")
-                    except Exception as e:
-                        logger.warning(f"Status callback failed: {e}")
+                        all_names = self.vector_store.get_all_topic_names()
+                    except Exception:
+                        all_names = []
+                    overlap = self.clarifier.detect_cross_domain_overlap(current_query, all_names)
+                    typo_fallback = self.fuzzy_search.detect_misspelled_query(current_query, all_names)
+                    if overlap:
+                        overlap_term, maritime_label, target_query = overlap
+                        logger.info(f"💡 [Cross-Domain Overlap] Detected '{overlap_term}' -> '{maritime_label}' for query '{current_query}'")
+                        clar_text, clar_payload = self.clarifier.build_cross_domain_text_clarification(
+                            current_query, overlap_term, maritime_label, target_query
+                        )
+                        if stream_callback:
+                            try:
+                                for tok in re.findall(r'\S+\s*|\n+', clar_text):
+                                    await stream_callback({"type": "content", "token": tok})
+                                state["_streamed_live"] = True
+                            except Exception as stream_err:
+                                logger.warning(f"Failed streaming cross-domain clarification: {stream_err}")
 
-                state = await fallback_node(
-                    state,
-                    self.suggestion_service,
-                    self.openai_service,
-                )
+                        state["node_response"] = {
+                            "type": "query",
+                            "content": clar_text,
+                            "sections": [],
+                            "chunks_used": [],
+                            "videos": [],
+                            "images": [],
+                            "pdfs": [],
+                            "question_suggestions": [],  # NO TAP BUTTONS
+                            "metadata": {
+                                "routing_reason": "cross_domain_clarification",
+                                "needs_clarification": True,
+                                "clarification": clar_payload,
+                                "category": "QUERY",
+                            },
+                        }
+                        state["retrieval_chunks"] = []
+                        state["video_suggestions"] = []
+                        state["company_answer"] = None
+                    elif typo_fallback:
+                        state = await self._handle_typo_correction(typo_fallback, state, stream_callback)
+                    else:
+                        if status_callback:
+                            try:
+                                await status_callback("generating", "Dolphin is generating response...")
+                            except Exception as e:
+                                logger.warning(f"Status callback failed: {e}")
+
+                        state = await fallback_node(
+                            state,
+                            self.suggestion_service,
+                            self.openai_service,
+                        )
 
             raw_result = state
 
@@ -2945,7 +3643,13 @@ Rules:
                 for s in (validated.sections or [])
             )
         )
-        if is_resp_out_of_scope or is_social:
+        is_clarification = (
+            clarification is not None
+            or bool((validated.metadata or {}).get("needs_clarification"))
+            or bool((validated.metadata or {}).get("clarification"))
+        )
+        is_sms_template_response = bool((validated.metadata or {}).get("is_sms_template") or (validated.metadata or {}).get("is_sms_template_discovery"))
+        if is_resp_out_of_scope or is_social or is_clarification or is_sms_template_response:
             if media_enrichment_task and not media_enrichment_task.done():
                 media_enrichment_task.cancel()
             all_images = []
@@ -3012,6 +3716,15 @@ Rules:
             "company_answer": company_answer,
             "question_suggestions": validated.question_suggestions or [],
         }
+        clarification_payload = None
+        if is_clarification:
+            if clarification:
+                clarification_payload = clarification.to_dict() if hasattr(clarification, "to_dict") else clarification
+            elif (validated.metadata or {}).get("clarification"):
+                clarification_payload = (validated.metadata or {}).get("clarification")
+
+        if clarification_payload:
+            metadata_to_save["clarification"] = clarification_payload
 
         updated_messages = await self.append_message(
             session_id,
@@ -3036,68 +3749,18 @@ Rules:
             final_cleaned_history[-1]["video_suggestions"] = final_videos
 
         latencies["pipeline_total"] = time.perf_counter() - t_pipeline_start
-
-        # Print the clean, structured 3-box terminal summary
-        try:
-            from services.terminal_logger import print_chat_execution_boxes
-            prompt_file = "dolphin_backend/pipeline/query.py" if node_type != "company" else "dolphin_backend/pipeline/company_query.py"
-            prompt_tmpl = "QUERY_PROMPT (Pedagogical Maritime Tutor)" if node_type != "company" else "PROMPT (Company Guidance)"
-            model_used = getattr(settings, "openai_model", "gpt-4o-mini")
-            api_endpoint = kwargs.get("api_endpoint", "POST /chat")
-
-            tmpl_text = None
-            start_line = 18
-            end_line = 170
-            try:
-                if node_type != "company":
-                    from pipeline.query import QUERY_PROMPT
-                    tmpl_text = QUERY_PROMPT
-                    start_line = 18
-                    end_line = 170
-                else:
-                    from pipeline.company_query import PROMPT as COMPANY_PROMPT
-                    tmpl_text = COMPANY_PROMPT
-                    start_line = 27
-                    end_line = 70
-            except Exception:
-                pass
-
-            print_chat_execution_boxes(
-                user_query=current_query,
-                user_profile=user_profile,
-                user_id=user_id,
-                session_id=session_id,
-                router_decision=router_decision,
-                node_type=node_type,
-                standalone_query=standalone_query,
-                retrieval_chunks=retrieval_chunks,
-                prompt_file=prompt_file,
-                prompt_template_name=prompt_tmpl,
-                model_name=model_used,
-                response_content=validated.content or assistant_content or "",
-                videos=final_videos,
-                images=all_images,
-                latencies=latencies,
-                company_answer=company_answer,
-                api_endpoint=api_endpoint,
-                prompt_template_text=tmpl_text,
-                prompt_start_line=start_line,
-                prompt_end_line=end_line,
-            )
-        except Exception as e:
-            logger.debug(f"Failed to print terminal summary boxes: {e}")
-
         return (
             validated,
             final_cleaned_history,
             standalone_query,
             understanding_summary,
             {
-                "videos": [] if (is_resp_out_of_scope or is_social) else final_videos,
-                "images": [] if (is_resp_out_of_scope or is_social) else all_images,
-                "pdfs": [] if (is_resp_out_of_scope or is_social) else all_pdfs,
-                "topic_codes": [] if (is_resp_out_of_scope or is_social) else all_topic_codes,
-                "company_answer": None if (is_resp_out_of_scope or is_social) else company_answer,
+                "videos": [] if (is_resp_out_of_scope or is_social or is_clarification) else final_videos,
+                "images": [] if (is_resp_out_of_scope or is_social or is_clarification) else all_images,
+                "pdfs": [] if (is_resp_out_of_scope or is_social or is_clarification) else all_pdfs,
+                "topic_codes": [] if (is_resp_out_of_scope or is_social or is_clarification) else all_topic_codes,
+                "company_answer": None if (is_resp_out_of_scope or is_social or is_clarification) else company_answer,
+                "clarification": clarification_payload if is_clarification else None,
                 "latencies": latencies,
             }
         )

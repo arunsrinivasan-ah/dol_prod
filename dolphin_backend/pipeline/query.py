@@ -3,7 +3,6 @@ import json
 import re
 from typing import Any, Dict, List, Optional
 from loguru import logger
-from config import settings
 
 from pipeline.history_utils import extract_clean_history
 from services.fuzzy_search_service import FuzzySearchService
