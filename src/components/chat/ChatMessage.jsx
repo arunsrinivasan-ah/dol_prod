@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Box,
   Typography,
@@ -118,6 +118,113 @@ const normalizePdf = (pdf) => {
   };
 };
 
+const extractShortTopicLabel = (questionText) => {
+  if (!questionText || typeof questionText !== "string") return "Maritime Topic";
+  let clean = questionText.replace(/^(\d+[.)]|[-*•])\s*/, "").replace(/[?.,!]+$/, "").trim();
+
+  // If it's already a title or permit name (not a conversational question starting with question words or ending with ?),
+  // keep the ENTIRE title dynamically without truncating words!
+  const isQuestion =
+    /^(what|how|why|can you|explain|describe|tell me|where|when|is|are|do|does)\b/i.test(clean) ||
+    questionText.trim().endsWith("?");
+
+  if (!isQuestion) {
+    return clean;
+  }
+
+  // If it's a conversational question sentence, strip conversational fluff
+  clean = clean.replace(
+    /^(what are the\s*(key|main|standard|vital|critical|emergency)?\s*(actions (for|during)\s*)?|procedure (for|of)\s*|how (do you|does|is|to|are)\s*|why is\s*|can you (explain|describe|tell me about)\s*|explain (the\s*)?|describe (the\s*)?|tell me about\s*|what is (the\s*)?|what keeps\s*|learn about\s*|explore\s*|review\s*|practice\s*|study\s*)/i,
+    ""
+  ).trim();
+  clean = clean.replace(
+    /\s+(aid navigation|safe at sea|vital onboard|used afloat|underway|rules|tips|steps|basics)\??$/i,
+    ""
+  ).trim();
+
+  if (!clean) return "Maritime Topic";
+
+  return clean
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+};
+
+const normalizeSuggestionItem = (item) => {
+  if (!item) return { label: "", query: "" };
+  if (typeof item === "object") {
+    const rawQuery = String(item.query || item.question || item.label || "").trim();
+    let rawLabel = String(item.label || item.topic || "").trim();
+    if (!rawLabel && rawQuery) {
+      rawLabel = extractShortTopicLabel(rawQuery);
+    }
+    return {
+      label: rawLabel || rawQuery,
+      query: rawQuery || rawLabel,
+    };
+  }
+
+  const queryStr = String(item).trim();
+  return {
+    label: extractShortTopicLabel(queryStr),
+    query: queryStr,
+  };
+};
+
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+export const prepareClickableSubtopics = (rawContent, candidates) => {
+  if (!rawContent) return "";
+  let processed = rawContent;
+
+  // 1. Match against known candidates (from suggestions / clarification options)
+  // Strictly match ONLY bulleted or numbered list items.
+  // Never turn bold words in opening paragraphs, sentences, or prose into links.
+  if (candidates && candidates.length) {
+    for (const candidate of candidates) {
+      const lbl = (candidate.label || "").trim();
+      const q = candidate.query || lbl;
+      if (!lbl) continue;
+
+      const encodedTarget = `#ask:${encodeURIComponent(q)}`;
+      const escapedLbl = escapeRegex(lbl);
+
+      // Match list item formats:
+      // a) "- **Title**", "* **Title**", "• **Title**", "1. **Title**", "1) **Title**"
+      const listBoldRegex = new RegExp(
+        `(^|\\n)([ \\t]*(?:[-*•]|\\d+[.)])[ \\t]+)\\*\\*(${escapedLbl})(:?)\\*\\*(?![\\(\\]])`,
+        "gi"
+      );
+      processed = processed.replace(listBoldRegex, `$1$2**[$3](${encodedTarget})**$4`);
+
+      // b) "**1. Title**" or "**1) Title**"
+      const numInsideBoldRegex = new RegExp(
+        `(^|\\n)([ \\t]*)\\*\\*(\\d+[.)][ \\t]+)(${escapedLbl})(:?)\\*\\*(?![\\(\\]])`,
+        "gi"
+      );
+      processed = processed.replace(numInsideBoldRegex, `$1$2**$3[$4](${encodedTarget})**$5`);
+    }
+  }
+
+  // 2. Auto-link intentional catalog / choices lists (like SMS permits, checklists, and option lists)
+  // Only link if the content explicitly indicates an option/catalog context
+  const isCatalogContext =
+    /(?:available permits|sms template|checklist|checklist items|permits to work|did you mean|which of these|choose (?:one|an option|any)|tap any|select (?:one|any)|following options)/i.test(processed);
+
+  if (isCatalogContext) {
+    processed = processed.replace(
+      /(^|\n)(\s*\d+[.)]\s+)\*\*([^\n*\[\]]+?)\*\*(?![\(\]])/g,
+      (match, prefix, numPrefix, title) => {
+        if (title.includes("[") || title.includes("]")) return match;
+        const cleanTitle = title.trim();
+        const encodedTarget = `#ask:${encodeURIComponent(cleanTitle)}`;
+        return `${prefix}${numPrefix}**[${cleanTitle}](${encodedTarget})**`;
+      }
+    );
+  }
+
+  return processed;
+};
 
 // ── Markdown prose styles ───
 export const markdownContainerSx = {
@@ -232,6 +339,67 @@ export const markdownContainerSx = {
 
   "& strong": { fontWeight: 600 },
   "& em": { fontStyle: "italic" },
+
+  // Links (e.g. clickable subtopics inside message text)
+  "& a": {
+    color: "primary.main",
+    textDecoration: "underline",
+    textUnderlineOffset: "3px",
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "all 0.15s ease",
+    "&:hover": {
+      color: "primary.main",
+      opacity: 0.8,
+      textDecoration: "underline",
+    },
+  },
+
+  // Tables
+  "& table": {
+    width: "100%",
+    borderCollapse: "collapse",
+    my: "1em",
+    fontSize: "0.9em",
+    overflowX: "auto",
+    display: "table",
+  },
+  "& th, & td": {
+    border: "1px solid",
+    borderColor: "divider",
+    p: "8px 12px",
+    textAlign: "left",
+    verticalAlign: "middle",
+  },
+  "& th": {
+    backgroundColor: "action.hover",
+    fontWeight: 600,
+  },
+  "& tr:nth-of-type(even)": {
+    backgroundColor: "action.selected",
+  },
+
+  // Task list checkboxes
+  "& input[type='checkbox']": {
+    mr: "8px",
+    verticalAlign: "middle",
+    accentColor: "primary.main",
+    width: "16px",
+    height: "16px",
+    cursor: "default",
+  },
+
+  // Inline images and diagrams
+  "& img": {
+    maxWidth: "100%",
+    height: "auto",
+    borderRadius: "10px",
+    my: "1.25em",
+    display: "block",
+    boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
+    border: "1px solid",
+    borderColor: "divider",
+  },
 };
 
 // ─── ChatMessage ──
@@ -510,14 +678,53 @@ const ChatMessage = ({
     return result;
   }, [pdf_suggestions, msg?.pdfs, msg?.metadata?.pdfs, isGreeting, isOutOfScope, isUser]);
 
-  const questionSuggestions = msg.question_suggestions || [];
+  const rawSuggestions = msg.question_suggestions || [];
+  const normalizedSuggestions = useMemo(() => {
+    return (rawSuggestions || [])
+      .map(normalizeSuggestionItem)
+      .filter((s) => s.label && s.query);
+  }, [rawSuggestions]);
+
+  const subtopicCandidates = useMemo(() => {
+    const map = new Map();
+    // 1. From clarification payload if available
+    if (msg.clarification?.options && Array.isArray(msg.clarification.options)) {
+      for (const opt of msg.clarification.options) {
+        const lbl = String(opt.label || "").trim();
+        const q = String(opt.query || lbl).trim();
+        if (lbl && opt.kind !== "other") {
+          map.set(lbl.toLowerCase(), { label: lbl, query: q });
+        }
+      }
+    }
+    // 2. From normalizedSuggestions
+    for (const s of normalizedSuggestions) {
+      if (s.label && !map.has(s.label.toLowerCase())) {
+        map.set(s.label.toLowerCase(), s);
+      }
+    }
+    return Array.from(map.values());
+  }, [msg.clarification, normalizedSuggestions]);
+
+  const isClarification = Boolean(
+    msg.clarification ||
+    msg.metadata?.clarification ||
+    msg.metadata?.needs_clarification === true ||
+    msg.metadata?.routing_reason === "clarification" ||
+    msg.metadata?.routing_reason === "cross_domain_clarification" ||
+    msg.category?.toLowerCase() === "clarification" ||
+    (typeof msg.content === "string" && (
+      msg.content.includes("Tap one of the options") ||
+      msg.content.includes("Which of these do you mean")
+    ))
+  );
 
   const shouldShowMedia =
     !isOutOfScope &&
     !isGreeting &&
     Boolean(msg.content && msg.content.length > 0);
   const shouldShowQuestions =
-    !isOutOfScope && questionSuggestions.length > 0;
+    !isOutOfScope && !isClarification && normalizedSuggestions.length > 0;
 
 
   const sanitizeDisplayContent = (content) => {
@@ -713,13 +920,30 @@ const ChatMessage = ({
                     <Box
                       component="div"
                       className="chat-markdown"
+                      onClick={(e) => {
+                        const targetLink = e.target.closest("a");
+                        if (!targetLink) return;
+                        const href = targetLink.getAttribute("href") || "";
+                        if (href.startsWith("#ask:") || href.startsWith("ask:")) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const rawQuery = href.startsWith("#ask:") ? href.slice(5) : href.slice(4);
+                          const query = decodeURIComponent(rawQuery).trim();
+                          if (query) {
+                            handleFollowUpQuestion(query);
+                          }
+                        }
+                      }}
                       sx={{
                         ...markdownContainerSx,
                         display: "block",
                       }}
                       dangerouslySetInnerHTML={{
                         __html: sanitizeMarkdown(
-                          sanitizeDisplayContent(msg.content || ""),
+                          prepareClickableSubtopics(
+                            sanitizeDisplayContent(msg.content || ""),
+                            subtopicCandidates
+                          ),
                           skipMarkdownFormatting
                         ).replace(
                           /(?:@@SOURCE_REF_|\[\[\s*Ref:?\s*)(\d+)\s*(?:@@|\]\])/gi,
@@ -1047,7 +1271,7 @@ const ChatMessage = ({
 
             */}
 
-            {/* Follow-up suggestions */}
+            {/* Follow-up suggestions (Preserved "Try asking..." full questions) */}
             {shouldShowQuestions && (
               <Box
                 sx={{
@@ -1068,9 +1292,9 @@ const ChatMessage = ({
                   Try asking...
                 </Typography>
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                  {questionSuggestions.map((q, i) => (
+                  {normalizedSuggestions.map((item, i) => (
                     <Box
-                      key={i}
+                      key={`try-asking-${i}`}
                       sx={(theme) => ({
                         display: "flex",
                         alignItems: "center",
@@ -1085,10 +1309,10 @@ const ChatMessage = ({
                           color: theme.palette.primary.main,
                         },
                       })}
-                      onClick={() => handleFollowUpQuestion(q)}
+                      onClick={() => handleFollowUpQuestion(item.query)}
                     >
                       <Typography variant="body2">
-                        {q.replace(/^(\d+[.)]|[-*•])\s*/, "")}
+                        {item.query.replace(/^(\d+[.)]|[-*•])\s*/, "")}
                       </Typography>
                     </Box>
                   ))}

@@ -36,14 +36,28 @@ import StopRoundedIcon from "@mui/icons-material/StopRounded";
 
 const formatGlossaryContent = (content) => {
   if (!content) return "";
-  return content.replace(
-    /([A-Z][A-Z\s]{2,}):\s*([\s\S]+?)(?=(?:[A-Z][A-Z\s]{2,}:)|$)/g,
-    (_, title, desc) =>
-      `\n- **${title
-        .trim()
-        .toLowerCase()
-        .replace(/\b\w/g, (c) => c.toUpperCase())}**: ${desc.trim()}\n`,
-  );
+  // Only convert standalone, unbulleted raw glossary lines (e.g., "ECDIS: Electronic Chart...")
+  // Do NOT touch lines that are already markdown list items (- , * , • ) or already bolded (**...)
+  const lines = content.split(/\r?\n/);
+  const formattedLines = lines.map((line) => {
+    const trimmed = line.trim();
+    if (
+      !trimmed ||
+      /^[•\-\*\⁃\◦\▪\▫\–\d\.]/.test(trimmed) ||
+      trimmed.startsWith("#") ||
+      trimmed.startsWith("**")
+    ) {
+      return line;
+    }
+    const match = trimmed.match(/^([A-Z][A-Za-z0-9\s]{1,30}):\s+(.+)$/);
+    if (match) {
+      const term = match[1].trim();
+      const desc = match[2].trim();
+      return `- **${term}**: ${desc}`;
+    }
+    return line;
+  });
+  return formattedLines.join("\n");
 };
 
 export const formatMarkdownContent = (content) => {
@@ -190,7 +204,12 @@ export const sanitizeMarkdown = (content, skipFormatting = false) => {
     breaks: true,
   });
 
-  return DOMPurify.sanitize(html);
+  return DOMPurify.sanitize(html, {
+    ADD_TAGS: ["input"],
+    ADD_ATTR: ["type", "checked", "disabled"],
+    ADD_DATA_URI_TAGS: ["img"],
+    ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp|data):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+  });
 };
 
 // ─── Normalisers ──
