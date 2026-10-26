@@ -192,8 +192,34 @@ export const formatMarkdownContent = (content) => {
     formatted += "*";
   }
 
-  // Wrap mathematical variables and Greek symbols in <var> for crisp academic typography
-  formatted = formatted.replace(/\bl(?=<sub>w[12]<\/sub>)/g, "<var>l</var>");
+  // ── Dynamic Maritime Formula & Subscript Formatting ──
+  // 1. Dynamic wind/heeling levers: lw1, lw2, l_w1, l_w2 -> <var>l</var><sub>w1</sub>, <var>l</var><sub>w2</sub>, etc.
+  formatted = formatted.replace(/(?<!<var[^>]*>)\b[lL]_?w([0-9a-zA-Z]+)\b(?!<\/sub>)/g, "<var>l</var><sub>w$1</sub>");
+  formatted = formatted.replace(/\bl(?=<sub>w[0-9a-zA-Z]+<\/sub>)/gi, "<var>l</var>");
+
+  // 2. Universal Greek variable + Subscript pattern: ϕ0, ϕ1, ϕ2, ϕf, θf, etc. (dynamic for any symbol & index)
+  formatted = formatted.replace(
+    /(?<=^|[^a-zA-Z0-9<>/])([ϕφθλαβγμρσΔ])_?([0-9a-z])(?![a-zA-Z0-9<>/])/gi,
+    "<var>$1</var><sub>$2</sub>"
+  );
+
+  // 3. Common maritime variables with subscripts: GM0, GM_0, GMo
+  formatted = formatted.replace(/\b(?:GMo|GM0|GM_0)\b(?!<\/sub>)/g, "<var>GM</var><sub>0</sub>");
+
+  // 4. Universal units with power exponents: m3, m2, cm3, cm2, mm3, etc.
+  formatted = formatted.replace(/\b(\d+)\s*(m|cm|mm|km)([23])\b(?!<\/sup>)/gi, "$1 $2<sup>$3</sup>");
+
+  // 5. Maritime emissions, gases, and chemicals
+  formatted = formatted.replace(/\bCO2\b(?!<\/sub>)/g, "CO<sub>2</sub>");
+  formatted = formatted.replace(/\bSOx\b(?!<\/sub>)/g, "SO<sub>x</sub>");
+  formatted = formatted.replace(/\bNOx\b(?!<\/sub>)/g, "NO<sub>x</sub>");
+  formatted = formatted.replace(/\bH2S\b(?!<\/sub>)/g, "H<sub>2</sub>S");
+  formatted = formatted.replace(/\bCH4\b(?!<\/sub>)/g, "CH<sub>4</sub>");
+  formatted = formatted.replace(/\bO2\b(?!<\/sub>)/g, "O<sub>2</sub>");
+  formatted = formatted.replace(/\bN2\b(?!<\/sub>)/g, "N<sub>2</sub>");
+  formatted = formatted.replace(/\bH2O\b(?!<\/sub>)/g, "H<sub>2</sub>O");
+
+  // Wrap remaining standalone mathematical variables and Greek symbols in <var>
   formatted = formatted.replace(/(?<!<var[^>]*>)(ϕ|φ|θ|Δ|α|β|γ|λ|μ|π|ρ|σ|Σ|Ω)(?!<\/var>)/g, "<var>$1</var>");
 
   return formatted.trim();
