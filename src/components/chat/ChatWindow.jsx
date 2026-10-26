@@ -63,7 +63,29 @@ const formatGlossaryContent = (content) => {
 export const formatMarkdownContent = (content) => {
   if (!content) return "";
 
-  let formatted = formatGlossaryContent(content);
+  // ── Protection Layer: Preserve Images, Data URIs, and Code Blocks ──
+  // Prevents downstream formula/glossary regexes from corrupting Base64 image payloads or code blocks
+  const protectedTokens = [];
+  const mask = (match) => {
+    const token = `@@PROTECTED_CONTENT_${protectedTokens.length}@@`;
+    protectedTokens.push(match);
+    return token;
+  };
+
+  // 1. Mask code blocks first (fenced and inline)
+  let masked = content.replace(/```[\s\S]*?```/g, mask);
+  masked = masked.replace(/`[^`\n]+`/g, mask);
+
+  // 2. Mask markdown images: ![alt](url)
+  masked = masked.replace(/!\[[\s\S]*?\]\([\s\S]*?\)/g, mask);
+
+  // 3. Mask HTML img tags: <img ... />
+  masked = masked.replace(/<img\b[^>]*\/?>/gi, mask);
+
+  // 4. Mask any standalone data URIs
+  masked = masked.replace(/data:image\/[^;]+;base64,[a-zA-Z0-9+/=]+/gi, mask);
+
+  let formatted = formatGlossaryContent(masked);
 
   // Remove thinking text
   formatted = formatted.replace(/Dolphin is thinking\.\.\./gi, "");
@@ -221,6 +243,11 @@ export const formatMarkdownContent = (content) => {
 
   // Wrap remaining standalone mathematical variables and Greek symbols in <var>
   formatted = formatted.replace(/(?<!<var[^>]*>)(ϕ|φ|θ|Δ|α|β|γ|λ|μ|π|ρ|σ|Σ|Ω)(?!<\/var>)/g, "<var>$1</var>");
+
+  // ── Restoration Layer: Restore Protected Images, Data URIs, and Code Blocks ──
+  for (let i = protectedTokens.length - 1; i >= 0; i--) {
+    formatted = formatted.replace(`@@PROTECTED_CONTENT_${i}@@`, () => protectedTokens[i]);
+  }
 
   return formatted.trim();
 };
