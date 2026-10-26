@@ -8,16 +8,13 @@ from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
 from datetime import datetime
 import time
+import urllib.parse
 
 from loguru import logger
 from pydantic import BaseModel
 
 from graph.build_graph import build_graph
-from pipeline.company_retrieval import (
-    company_retrieval_node,
-    get_company_template_catalog,
-    fetch_template_document_data,
-)
+from pipeline.company_retrieval import company_retrieval_node
 from retrieval.faiss_store import DEFAULT_TOP_K, FAISSStore
 from retrieval.postgres_loader import PostgresLoader
 from services.embedding_config import EMBEDDING_DIM
@@ -36,6 +33,12 @@ from services.clarification_service import (
     parse_general_overview,
     is_definitional_question,
     definitional_term,
+)
+from services.question_scope import (
+    classify_question_scope,
+    extract_specific_subject_terms,
+    SCOPE_GENERAL,
+    SCOPE_SPECIFIC,
 )
 from models.node_response import NodeResponse
 from models.database import get_pool
@@ -62,10 +65,11 @@ from config import settings
 from services.image_service import ImageService
 from services.fuzzy_search_service import FuzzySearchService
 from services.pdf_service import pdf_service
-from pipeline.company_query import company_query_node, company_template_query_node
+from pipeline.company_query import company_query_node
 from services.maritime_acronyms import (
     find_acronyms_in_query,
     get_acronym_expansion,
+    get_strict_acronym_expansions,
     GENERIC_MARITIME_WORDS,
     expand_query_terms_for_media,
     has_conflicting_acronym,
@@ -76,72 +80,6 @@ from services.off_topic_detector import (
     is_obvious_marine_query,
 )
 
-# -------------------------------------------------------------
-# 📋 SMS FORM / PERMIT INTENT DETECTION
-# -------------------------------------------------------------
-SPECIFIC_PERMIT_PATTERNS = [
-    (r'\b(hot\s*work|ss\s*001|ss001)\b', 'Hot Work Permit'),
-    (r'\b(cold\s*work|ss\s*002|ss002)\b', 'Cold Work Permit'),
-    (r'\b(enclosed\s*space|confined\s*space|ss\s*004|ss004)\b', 'Enclosed Space Entry Permit'),
-    (r'\b(electrical\s*work|ss\s*003|ss003|isolation)\b', 'Electrical Work Permit'),
-    (r'\b(high\s*voltage)\b', 'High Voltage (Over 1000 V) Work Permit'),
-    (r'\b(height|overside)\b', 'Work At Height Overside Permit'),
-    (r'\b(crane|personnel\s*transfer)\b', 'Personnel Transfer Using Crane'),
-    (r'\b(underwater)\b', 'Underwater Operations Work Permit'),
-    (r'\b(adverse\s*weather|deck\s*access)\b', 'Work Access On Deck During Adverse Weather Permit'),
-    (r'\b(passenger\s*lift|elevator)\b', 'Work On Passenger Lift Equipment And Systems Permit'),
-    (r'\b(pressuri[sz]ed\s*pipeline|pipeline\s*equipment)\b', 'Work On Pressurised Pipelines Equipment Permit'),
-    (r'\b(bunkering|e05)\b', 'Bunkering Safety Checklist'),
-    (r'\b(familiaris\w*|familiariz\w*|ss\s*006|ss006)\b', 'Safety Familiarisation Checklist'),
-    (r'\b(risk\s*assessment|ra\s*001|ra001)\b', 'Risk Assessment Format'),
-    (r'\b(handing\s*over|taking\s*over|per\s*002|per002)\b', 'Handing Taking Over Report'),
-]
-
-TEMPLATE_INDICATORS = {'template', 'templates', 'form', 'forms', 'permit', 'permits', 'checklist', 'checklists', 'ptw', 'certificate', 'format'}
-
-def detect_sms_template_intent(query: str) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Returns (intent_type, template_target)
-    - ('SPECIFIC', 'Hot Work Permit'): user named a specific form/permit
-    - ('DISCOVERY', None): user asked generally for sms templates/forms/permits
-    - (None, None): not a template request
-    """
-    q = (query or '').strip().lower()
-    words = set(re.findall(r'\b\w+\b', q))
-    has_indicator = bool(words & TEMPLATE_INDICATORS)
-    has_sms = 'sms' in words or 'company' in words or 'safety management system' in q
-
-    EDUCATIONAL_PREFIXES = r'\b(what\s+is|what\s+are|how\s+to|how\s+do|why\s+is|why\s+do|explain|describe|difference\s+between|hazards\s+of|duties\s+of|precautions\s+for)\b'
-    is_educational = bool(re.search(EDUCATIONAL_PREFIXES, q))
-
-    if not is_educational:
-        for pattern, name in SPECIFIC_PERMIT_PATTERNS:
-            if re.search(pattern, q):
-                has_code = bool(re.search(r'\b(ss\s*00[1-6]|ss00[1-6]|ra\s*001|ra001|e05|per\s*002)\b', q))
-                if (
-                    has_indicator
-                    or has_code
-                    or any(w in q for w in ['give', 'show', 'need', 'want', 'get', 'download', 'sample', 'provide'])
-                    or len(q) <= 60
-                ):
-                    return ('SPECIFIC', name)
-
-    if (has_sms and has_indicator) or q in [
-        'sms template', 'sms templates', 'sms form', 'sms forms',
-        'permit templates', 'ptw templates', 'company template', 'company templates',
-        'give me sms template', 'what sms templates do you have'
-    ]:
-        return ('DISCOVERY', None)
-
-    # Dynamic fallback: matches any custom permit/checklist/form uploaded to company documents
-    # (e.g. user clicks or asks for a custom uploaded permit name not in the static pattern list)
-    if has_indicator and len(q) <= 70 and not is_educational:
-        cleaned = re.sub(r'^(give\s+me|show\s+me|i\s+need|i\s+want|provide|sample\s+of)\s+', '', q, flags=re.IGNORECASE).strip()
-        cleaned = re.sub(r'\s+(template|sample)$', '', cleaned, flags=re.IGNORECASE).strip()
-        if len(cleaned.split()) >= 2:
-            return ('SPECIFIC', cleaned.title())
-
-    return (None, None)
 
 
 def normalize_video_url(url: str) -> str:
@@ -499,6 +437,10 @@ class ChatService:
                     )
                     if isinstance(raw.get("clarification"), dict):
                         normalized["clarification"] = raw["clarification"]
+                    elif isinstance(raw.get("metadata"), dict) and isinstance(raw["metadata"].get("clarification"), dict):
+                        normalized["clarification"] = raw["metadata"]["clarification"]
+                    if isinstance(raw.get("metadata"), dict):
+                        normalized["metadata"] = raw["metadata"]
                 cleaned.append(normalized)
                 continue
 
@@ -928,11 +870,14 @@ class ChatService:
         query: str = "",
         max_images: int = 5,
         context_chunks: Optional[List[Dict[str, Any]]] = None,
+        question_scope: str = SCOPE_GENERAL,
     ) -> List[Dict[str, Any]]:
         """Filter out broken, noisy, or unreadable PDF scraps, prioritize clear relevant topic photos that exist or can be cached on disk."""
         query_clean = (query or "").lower().strip()
         from services.maritime_acronyms import expand_query_terms_for_media, COMMON_ENGLISH_STOPWORDS
+        from services.question_scope import SCOPE_SPECIFIC, extract_specific_subject_terms
         effective_query_words = expand_query_terms_for_media(query, (context_chunks or []) + (chunks or []))
+        specific_subject_terms = extract_specific_subject_terms(query) if question_scope == SCOPE_SPECIFIC else set()
 
         # Extract 2-word phrase ngrams from query for exact matching (exclude English stopwords so phrases like 'different types' never match)
         content_words = [w for w in re.findall(r'\b[a-zA-Z]{3,}\b', query_clean) if w not in COMMON_ENGLISH_STOPWORDS]
@@ -982,7 +927,7 @@ class ChatService:
                 seen_keys.add(key)
 
                 # Discard image if candidate text contains a conflicting maritime acronym
-                from services.maritime_acronyms import has_conflicting_acronym, find_acronyms_in_query, get_acronym_expansion
+                from services.maritime_acronyms import has_conflicting_acronym, find_acronyms_in_query, get_strict_acronym_expansions
                 if has_conflicting_acronym(query, f"{title} {about} {topic_name}"):
                     continue
 
@@ -996,7 +941,7 @@ class ChatService:
                         if re.search(rf'\b{re.escape(acr_lower)}\b', combined_text):
                             has_acr_match = True
                             break
-                        for exp in get_acronym_expansion(acr):
+                        for exp in get_strict_acronym_expansions(acr):
                             if exp.lower() in combined_text:
                                 has_acr_match = True
                                 break
@@ -1083,6 +1028,18 @@ class ChatService:
                 if effective_query_words and match_count == 0 and not has_exact_phrase and not matches_retrieved_topic:
                     continue
 
+                # Scope enforcement for SPECIFIC questions:
+                # The image MUST match at least one specific subject term in title, about, or topic.
+                # It cannot qualify merely because matches_retrieved_topic is True for a general topic name.
+                if question_scope == SCOPE_SPECIFIC and specific_subject_terms:
+                    cand_text = f"{title} {about} {topic_name}".lower()
+                    has_spec_match = any(
+                        re.search(r'\b' + re.escape(st) + r'\b', cand_text)
+                        for st in specific_subject_terms
+                    ) or any(bg in cand_text for bg in bigrams if any(st in bg for st in specific_subject_terms))
+                    if not has_spec_match:
+                        continue
+
                 # Authentic title if missing or overly generic (never use generic "Reference Image")
                 display_title = title
                 if not display_title or display_title.lower() in ("image", "none", "null", "untitled", "reference image"):
@@ -1167,7 +1124,7 @@ class ChatService:
         detected_acronyms = find_acronyms_in_query(query)
         for acr in detected_acronyms:
             patterns.append(f"%{acr}%")
-            for exp in get_acronym_expansion(acr):
+            for exp in get_strict_acronym_expansions(acr):
                 if len(exp) >= 4 and exp.lower() not in GENERIC_MARITIME_WORDS:
                     patterns.append(f"%{exp}%")
 
@@ -1393,11 +1350,14 @@ class ChatService:
         query: str = "",
         max_videos: int = 5,
         context_chunks: Optional[List[Dict[str, Any]]] = None,
+        question_scope: str = SCOPE_GENERAL,
     ) -> List[Dict[str, Any]]:
         """Filter out broken video links, deduplicate, and prioritize specific relevant videos over generic intro videos."""
         query_clean = (query or "").lower().strip()
         from services.maritime_acronyms import expand_query_terms_for_media, has_conflicting_acronym, COMMON_ENGLISH_STOPWORDS
+        from services.question_scope import SCOPE_SPECIFIC, extract_specific_subject_terms
         effective_query_words = expand_query_terms_for_media(query, (context_chunks or []) + (chunks or []))
+        specific_subject_terms = extract_specific_subject_terms(query) if question_scope == SCOPE_SPECIFIC else set()
         query_asked_intro = any(w in query_clean for w in ["intro", "introduction", "overview", "basics", "summary"])
 
         # Extract 2-word phrase ngrams from query for exact matching (exclude English stopwords so phrases like 'different types' never match)
@@ -1484,6 +1444,17 @@ class ChatService:
             if effective_query_words and match_count == 0 and not has_exact_phrase and not has_combined_phrase:
                 return
 
+            # Scope enforcement for SPECIFIC questions:
+            # Candidate video MUST match the specific subject asked about and intro videos are never allowed
+            if question_scope == SCOPE_SPECIFIC and specific_subject_terms:
+                cand_vid_text = f"{lower_title} {topic_name.lower()}"
+                has_spec_match = any(
+                    re.search(r'\b' + re.escape(st) + r'\b', cand_vid_text)
+                    for st in specific_subject_terms
+                ) or any(bg in cand_vid_text for bg in bigrams if any(st in bg for st in specific_subject_terms))
+                if not has_spec_match or is_intro:
+                    return
+
             score += match_count * 30.0
             if has_exact_phrase or has_combined_phrase:
                 score += 100.0
@@ -1494,7 +1465,7 @@ class ChatService:
                 if re.search(r'\b' + re.escape(acr) + r'\b', title, flags=re.I):
                     score += 250.0
                     break
-                expansions = get_acronym_expansion(acr)
+                expansions = get_strict_acronym_expansions(acr)
                 if expansions:
                     primary_exp = expansions[0]
                     if len(primary_exp) >= 6 and primary_exp.lower() in lower_title:
@@ -1681,6 +1652,7 @@ class ChatService:
         candidates: List[Tuple[Dict[str, Any], str]],
         query: str = "",
         max_pdfs: int = 3,
+        question_scope: str = SCOPE_GENERAL,
     ) -> List[Dict[str, Any]]:
         """
         Strictly filter and rank candidate PDFs based on relevance to the user's question,
@@ -1697,8 +1669,10 @@ class ChatService:
             GENERIC_MARITIME_WORDS,
             COMMON_ENGLISH_STOPWORDS,
         )
+        from services.question_scope import SCOPE_SPECIFIC, extract_specific_subject_terms
 
         query_acronyms = find_acronyms_in_query(query)
+        specific_subject_terms = extract_specific_subject_terms(query) if question_scope == SCOPE_SPECIFIC else set()
         stop_words = COMMON_ENGLISH_STOPWORDS | GENERIC_MARITIME_WORDS | {
             "document", "documents", "pdf", "pdfs", "file", "files", "course", "content", "related"
         }
@@ -1797,7 +1771,7 @@ class ChatService:
                         has_acr_about = True
                         score += 20.0
 
-                    for exp in get_acronym_expansion(acr):
+                    for exp in get_strict_acronym_expansions(acr):
                         exp_lower = exp.lower()
                         if exp_lower in title_lower:
                             has_acr_title = True
@@ -1845,6 +1819,17 @@ class ChatService:
                     continue
 
                 if effective_query_words and match_words_in_title == 0 and match_words_in_topic == 0:
+                    continue
+
+            # Scope enforcement for SPECIFIC questions:
+            # The candidate PDF MUST match at least one specific subject term in title, topic, or about
+            if question_scope == SCOPE_SPECIFIC and specific_subject_terms:
+                cand_pdf_text = f"{title_lower} {about_lower} {topic_lower}"
+                has_spec_match = any(
+                    re.search(r'\b' + re.escape(st) + r'\b', cand_pdf_text)
+                    for st in specific_subject_terms
+                )
+                if not has_spec_match:
                     continue
 
             # 5. Reject single-word generic titles that are ambiguous (e.g. "Chemicals", "Difficulties", "Issues")
@@ -1967,6 +1952,7 @@ class ChatService:
         retrieval_chunks: List[Dict[str, Any]],
         current_query: str,
         video_suggestions: List[Dict[str, Any]],
+        question_scope: str = SCOPE_GENERAL,
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, float], float]:
         """Run image, PDF, and video enrichment concurrently in background while LLM generates answer."""
         if not retrieval_chunks:
@@ -1991,29 +1977,21 @@ class ChatService:
 
         async def _enrich_images() -> List[Dict[str, Any]]:
             t_if0 = time.perf_counter()
-            images = await self._filter_and_rank_images(retrieval_chunks, query=current_query, max_images=5)
+            images = await self._filter_and_rank_images(
+                retrieval_chunks, query=current_query, max_images=4, question_scope=question_scope
+            )
             media_sub_timings["image_filter_cache"] = time.perf_counter() - t_if0
 
-            if len(images) < 3 and retrieval_chunks:
+            # Sibling broadening and count padding is ONLY allowed for GENERAL questions
+            if question_scope == SCOPE_GENERAL and len(images) < 4 and retrieval_chunks:
                 t_sib0 = time.perf_counter()
-                needed = 3 - len(images)
+                needed = 4 - len(images)
                 sibling_images = await self._find_sibling_images(
                     retrieval_chunks, query=current_query, max_images=needed, db_timings=media_sub_timings
                 )
-                seen_img_keys = {img.get("Url") or img.get("url") for img in images}
-                seen_titles = {re.sub(r'[^a-zA-Z0-9]', '', (img.get("Title") or img.get("title") or "")).lower() for img in images}
-                for simg in sibling_images:
-                    s_key = simg.get("Url") or simg.get("url")
-                    s_title = re.sub(r'[^a-zA-Z0-9]', '', (simg.get("Title") or simg.get("title") or "")).lower()
-                    if s_key and s_key not in seen_img_keys and (not s_title or s_title not in seen_titles):
-                        seen_img_keys.add(s_key)
-                        if s_title:
-                            seen_titles.add(s_title)
-                        images.append(simg)
-                        if len(images) >= 3:
-                            break
+                images.extend(sibling_images)
                 media_sub_timings["sibling_images"] = time.perf_counter() - t_sib0
-            return images
+            return images[:4]
 
         async def _enrich_pdfs() -> List[Dict[str, Any]]:
             t_pr0 = time.perf_counter()
@@ -2029,7 +2007,7 @@ class ChatService:
 
             # 2. Strictly filter and rank chunk PDFs against current_query
             filtered_chunk_candidates = self._filter_and_rank_pdfs(
-                raw_chunk_candidates, query=current_query, max_pdfs=3
+                raw_chunk_candidates, query=current_query, max_pdfs=3, question_scope=question_scope
             )
 
             # 3. Asynchronously resolve authentic document titles for top candidates
@@ -2046,27 +2024,17 @@ class ChatService:
             pdfs = pdf_service.deduplicate_titles(pdfs)
             media_sub_timings["pdf_resolution"] = time.perf_counter() - t_pr0
 
-            # 4. Sibling PDF lookup if fewer than 3 relevant PDFs exist in retrieved chunks
-            if len(pdfs) < 3 and retrieval_chunks:
+            # 4. Fallback: Search DB siblings ONLY for GENERAL questions if fewer than 3 PDFs were found
+            if question_scope == SCOPE_GENERAL and len(pdfs) < 3 and retrieval_chunks:
                 t_sib0 = time.perf_counter()
                 needed = 3 - len(pdfs)
                 sibling_pdfs = await self._find_sibling_pdfs(
                     retrieval_chunks, query=current_query, max_pdfs=needed, db_timings=media_sub_timings
                 )
-                seen_pdf_keys = {p.get("link", "").lower().split("?")[0].rstrip("/") for p in pdfs if p.get("link")}
-                seen_pdf_titles = {re.sub(r'[^a-zA-Z0-9]', '', (p.get("title") or "")).lower() for p in pdfs if p.get("title")}
-
+                seen_pdf_titles = {p.get("title", "").strip().lower() for p in pdfs}
                 for spdf in sibling_pdfs:
-                    p_link = spdf.get("link", "").lower().split("?")[0].rstrip("/")
-                    s_title = re.sub(r'[^a-zA-Z0-9]', '', (spdf.get("title") or "")).lower()
-
-                    if p_link and p_link in seen_pdf_keys:
-                        continue
-                    if s_title and s_title in seen_pdf_titles:
-                        continue
-
-                    seen_pdf_keys.add(p_link)
-                    if s_title:
+                    s_title = spdf.get("title", "").strip().lower()
+                    if s_title and s_title not in seen_pdf_titles:
                         seen_pdf_titles.add(s_title)
                     pdfs.append(spdf)
                     if len(pdfs) >= 3:
@@ -2077,9 +2045,10 @@ class ChatService:
 
         async def _enrich_videos() -> List[Dict[str, Any]]:
             videos = self._filter_and_rank_videos(
-                retrieval_chunks, video_suggestions, query=current_query, max_videos=5
+                retrieval_chunks, video_suggestions, query=current_query, max_videos=5, question_scope=question_scope
             )
-            if len(videos) < 5 and retrieval_chunks:
+            # Sibling video search ONLY for GENERAL questions if more videos are needed
+            if question_scope == SCOPE_GENERAL and len(videos) < 5 and retrieval_chunks:
                 t_sib0 = time.perf_counter()
                 needed = 5 - len(videos)
                 sibling_videos = await self._find_sibling_videos(
@@ -2093,7 +2062,7 @@ class ChatService:
                         seen_vid_keys.add(v_key)
                         combined.append(svid)
                 videos = self._filter_and_rank_videos(
-                    retrieval_chunks, combined, query=current_query, max_videos=5
+                    retrieval_chunks, combined, query=current_query, max_videos=5, question_scope=question_scope
                 )
                 media_sub_timings["sibling_videos"] = time.perf_counter() - t_sib0
             return videos
@@ -2145,15 +2114,59 @@ class ChatService:
         try:
             # Acronym domain expansion for vector embedding & BM25 search
             effective_search_query = query
+
+            # Carrier Frame Disentanglement
+            prefix_patterns = [
+                r'^(?:port\s+state\s+control\s+(?:psc\s+)?inspection\s+checklist\s+for\s+)(.*)$',
+                r'^(?:auditor\s+checklist\s+(?:and\s+penalties\s+)?(?:for\s+non-compliance\s+with\s+|for\s+)?)(.*)$',
+                r'^(?:summary\s+of\s+changes\s+effective\s+dates\s+(?:and\s+grandfather\s+clauses\s+)?for\s+)(.*)$',
+                r'^(?:how\s+to\s+prepare\s+vessel\s+survey\s+and\s+certificate\s+endorsements\s+for\s+)(.*)$',
+                r'^(?:imo\s+circulars?\s+and\s+resolution\s+implementation\s+dates\s+for\s+)(.*)$',
+                r'^(?:flag\s+state\s+enforcement\s+(?:and\s+survey\s+deadlines\s+)?regarding\s+)(.*)$',
+                r'^(?:troubleshooting\s+and\s+safety\s+guidelines\s+for\s+)(.*)$',
+                r'^(?:chief\s+engineer\s+checklist\s+for\s+)(.*)$',
+                r'^(?:detailed\s+regulatory\s+guidance\s*:\s*)(.*)$',
+            ]
+            for pat in prefix_patterns:
+                m = re.match(pat, effective_search_query, re.IGNORECASE)
+                if m:
+                    extracted_core = m.group(1).strip()
+                    if len(extracted_core) >= 8:
+                        effective_search_query = f"{extracted_core} {effective_search_query}"
+                    break
+
             try:
                 acrs = find_acronyms_in_query(query)
                 for acr in acrs:
-                    exps = get_acronym_expansion(acr)
-                    if exps:
-                        effective_search_query += " " + " ".join(exps[:3])
-            except Exception:
-                pass
+                    exps = get_strict_acronym_expansions(acr) or get_acronym_expansion(acr)
+                    primary_exp = exps[0] if exps else ""
+                    # Canonicalize single-concept queries (e.g. 'cow' or 'crude oil washing' -> 'Crude Oil Washing (COW)')
+                    words_clean = set(re.sub(r's$', '', w) for w in re.findall(r'\b[a-zA-Z]{3,}\b', query.lower()))
+                    primary_words = set(re.sub(r's$', '', w) for w in re.findall(r'\b[a-zA-Z]{3,}\b', primary_exp.lower())) if primary_exp else set()
+                    is_canonical_match = (
+                        query.strip().upper() == acr
+                        or (primary_words and words_clean == primary_words)
+                    )
+                    if is_canonical_match and primary_exp:
+                        canonical_base = f"{primary_exp.title()} ({acr})"
+                        extra_kws = [e for e in exps[1:4] if e.lower() not in canonical_base.lower()]
+                        if extra_kws:
+                            effective_search_query = f"{canonical_base} {' '.join(extra_kws)}"
+                        else:
+                            effective_search_query = canonical_base
+                        logger.info(f"⚡ [Canonical Search] Unified '{query}' -> '{effective_search_query}'")
+                        break
+                    else:
+                        if acr.lower() not in effective_search_query.lower().split():
+                            effective_search_query += f" {acr}"
+                        if exps:
+                            sub_exps = [e for e in exps if e.lower() != query.lower()]
+                            if sub_exps:
+                                effective_search_query += " " + " ".join(sub_exps[:4])
+            except Exception as e:
+                logger.warning(f"Acronym expansion failed: {e}")
 
+            logger.info(f"🔍 Effective search query for retrieval: '{effective_search_query}'")
             raw_chunks = await self.vector_store.search_with_embeddings(effective_search_query, k=k)
 
             content_ids: List[int] = []
@@ -2203,16 +2216,65 @@ class ChatService:
                     except (TypeError, ValueError):
                         pass
 
+                # Drop single-letter or noise topic chunks (e.g. 'N', 'F', '1.') when query has real technical content
+                t_name = (merged.get("topic_name") or "").strip()
+                if len(t_name) <= 2 and len(query.strip()) > 2:
+                    logger.info(f"Dropping single-character noise chunk: topic='{t_name}'")
+                    continue
+
+                # Acronym conflict guard: If query targets a specific acronym (e.g. OMM),
+                # reject chunks that belong to a conflicting acronym domain (e.g. ODMCS).
+                try:
+                    chunk_text = f"{merged.get('topic_name', '')} {str(merged.get('topic_content', ''))[:300]}"
+                    if has_conflicting_acronym(query, chunk_text):
+                        logger.info(
+                            f"Dropping chunk with conflicting acronym: topic='{merged.get('topic_name')}'"
+                        )
+                        continue
+                except Exception:
+                    pass
+
                 logger.debug(
                     "MERGED CHUNK = {}",
                     merged
                 )
                 retrieval_chunks.append(self._normalize_chunk(merged))
 
+            # Content-aware temporal & regulatory re-ranking
+            # When the user query specifies a date constraint (e.g. 2024, 2025, 2026, jan 2026) or regulatory action (amendment, mepc, seemp, regulation, dcs, eu ets)
+            q_lower_reg = query.lower()
+            temporal_regulatory_matches = re.findall(
+                r'\b(20[1-3]\d|jan(?:uary)?|effective|amendment|amendments|regulation|regulations|rule|rules|mepc(?:\.\d+)?|seemp|force|dcs|eu\s*ets|fueleu|ets)\b',
+                q_lower_reg
+            )
+            if temporal_regulatory_matches and len(retrieval_chunks) > 1:
+                query_constraints = set(temporal_regulatory_matches)
+                has_year = any(re.match(r'^(20[1-3]\d)$', t) for t in query_constraints)
+                has_eu_ets = any(t in ("eu ets", "eu", "ets", "fueleu") for t in query_constraints)
+
+                def _constraint_score(c):
+                    t_name_lower = str(c.get('topic_name', '')).lower()
+                    full_text = f"{t_name_lower} {str(c.get('topic_content', ''))[:4000]}".lower()
+                    matches = sum(1 for term in query_constraints if re.search(r'\b' + re.escape(term) + r'\b', full_text))
+                    year_match = 3 if has_year and any(re.search(r'\b' + re.escape(y) + r'\b', full_text) for y in query_constraints if re.match(r'^(20[1-3]\d)$', y)) else 0
+                    eu_boost = 3 if has_eu_ets and ("eu regulation" in t_name_lower or "regional" in t_name_lower or "ets" in t_name_lower) else 0
+                    return matches + year_match + eu_boost
+
+                max_matches = max(_constraint_score(c) for c in retrieval_chunks)
+                if max_matches >= 2:
+                    retrieval_chunks.sort(key=lambda c: _constraint_score(c), reverse=True)
+                    # When a specific future year is requested and relevant chunks exist,
+                    # filter out chunks that have 0 matches to avoid confusing the LLM with unrelated equipment
+                    if has_year and any(_constraint_score(c) >= 3 for c in retrieval_chunks):
+                        matched_chunks = [c for c in retrieval_chunks if _constraint_score(c) > 0]
+                        if matched_chunks:
+                            retrieval_chunks = matched_chunks
+                    for r_idx, c in enumerate(retrieval_chunks):
+                        c["_rank"] = r_idx
+                    logger.info(f"⚡ [Temporal/Regulatory Rerank] Boosted chunks matching {query_constraints} to rank 0 (count={len(retrieval_chunks)})")
+
             # Safety fallback: If filter dropped all chunks but raw_chunks exist, keep the top 2 ONLY for marine queries/acronyms
             if not retrieval_chunks and raw_chunks:
-                from services.off_topic_detector import is_marine_domain_query, is_obvious_marine_query
-                from services.maritime_acronyms import find_acronyms_in_query
                 if is_marine_domain_query(query) or is_obvious_marine_query(query) or bool(find_acronyms_in_query(query)):
                     logger.info("⚠️ Filter dropped all chunks; retaining top raw chunks as safety fallback for marine query")
                     for chunk in raw_chunks[:2]:
@@ -2234,7 +2296,11 @@ class ChatService:
                 )
                 if approved_mem and approved_mem.get("preferred_response"):
                     sme_pref = approved_mem["preferred_response"]
-                    logger.info(f"🌟 Retrieved SME-Approved Override in _retrieve_chunks for query '{query[:50]}'")
+                    is_direct = approved_mem.get("is_direct_override", True)
+                    logger.info(
+                        f"🌟 Retrieved SME-Approved match in _retrieve_chunks (direct={is_direct}, score={approved_mem.get('score', 1.0):.2f}) "
+                        f"for query '{query[:50]}'"
+                    )
                     sme_chunk = {
                         "content_id": 999999,
                         "topic_code": "SME-OFFICIAL-GUIDANCE",
@@ -2244,11 +2310,13 @@ class ChatService:
                         "videos": [],
                         "images": [],
                         "pdfs": [],
-                        "_score": 1.0,
+                        "_score": float(approved_mem.get("score", 1.0)),
                         "_rank": 0,
                         "_is_sme_approved": True,
+                        "_is_direct_override": is_direct,
                         "_sme_preferred_response": sme_pref,
                         "_sme_feedback_id": approved_mem.get("feedback_id"),
+                        "_sme_match_type": approved_mem.get("match_type", "exact"),
                     }
                     retrieval_chunks.insert(0, sme_chunk)
             except Exception as mem_err:
@@ -2428,23 +2496,52 @@ class ChatService:
             q_lower
         ))
         
+        # Guard: Explicit Named Topic Reset
+        # If user explicitly recalls a topic (e.g. "tell me about ECDIS again", "back to COW"),
+        # strip conversational filler so it remains clean without history contamination.
+        from services.maritime_acronyms import find_acronyms_in_query
+        from services.off_topic_detector import has_strong_marine_signal
+        detected_acrs = find_acronyms_in_query(current_query)
+        is_recall_phrase = bool(re.search(r'\b(again|earlier|back to|repeat|once more|previously|as mentioned)\b', q_lower))
+        has_pure_pronoun = bool(re.search(r'\b(it|this|that|above|point\s*\d+|step\s*\d+)\b', q_lower))
+        if (detected_acrs or has_strong_marine_signal(current_query)) and is_recall_phrase and not has_pure_pronoun:
+            cleaned_q = re.sub(r'\b(tell me about|explain|describe|what about|back to|can you tell me|again|earlier|repeat|once more|previously|as mentioned)\b', '', current_query, flags=re.I).strip()
+            if cleaned_q and (find_acronyms_in_query(cleaned_q) or has_strong_marine_signal(cleaned_q)):
+                logger.info(f"⚡ [Topic Reset] User explicitly recalled topic '{cleaned_q}' -> returning clean standalone query")
+                return cleaned_q
+
         # Only treat as a conversational follow-up if it starts with a follow-up phrase or has coreferences
         is_followup_starter = q_lower.startswith((
             "and ", "what about", "how about", "why ", "why?", "how come", "also ",
             "tell more", "explain more", "more details", "what else", "what next", "continue"
         ))
 
-        # Standalone topic queries (e.g. "enclosed space entry", "fire fighting", "SEEMP") are not follow-ups
-        if not has_reference and not is_followup_starter:
+        # Check if current query is a short term or acronym explicitly mentioned in the assistant's last answer
+        is_term_in_last_answer = False
+        if last_answer and len(current_query.split()) <= 4:
+            clean_token = re.sub(r'[^\w\s]', '', q_lower).strip()
+            if clean_token and len(clean_token) >= 2 and re.search(r'\b' + re.escape(clean_token) + r'\b', last_answer.lower()):
+                is_term_in_last_answer = True
+
+        # Standalone topic queries that are not references, starters, or terms from the last answer
+        if not has_reference and not is_followup_starter and not is_term_in_last_answer:
             return current_query
 
         try:
-            last_question = previous_questions[-1]
+            # Multi-turn history awareness for ordinal references ("first topic", "second topic", "initial topic")
+            is_ordinal_ref = bool(re.search(
+                r'\b(first\s*(?:topic|one|question|item)|second\s*(?:topic|one|question|item)|third\s*(?:topic|one|question|item)|earlier\s*topic|initial\s*topic|beginning)\b',
+                q_lower
+            ))
+            if is_ordinal_ref and len(previous_questions) > 1:
+                history_summary = "\n".join([f"Turn {i+1}: {q}" for i, q in enumerate(previous_questions)])
+                prompt_history = f"Full conversation question history:\n{history_summary}"
+            else:
+                prompt_history = f"Previous user question:\n{previous_questions[-1]}"
 
             prompt = f"""You are a query rewriting assistant.
 
-Previous user question:
-{last_question}
+{prompt_history}
 
 Last assistant answer:
 {last_answer or "N/A"}
@@ -2453,9 +2550,9 @@ Current question:
 {current_query}
 
 Task:
-1. If the current question depends on the previous question → rewrite it as a standalone question.
+1. If the current question depends on previous questions (e.g. refers to 'it', 'point 2', 'first topic', 'second topic') → rewrite it as a clear standalone question with the specific topic name.
 2. If the current question refers to "point 1", "point 2", "this", "that", "above" → resolve it using the assistant's last answer.
-3. If the question is independent → return it unchanged.
+3. If the question is independent or explicitly names its own topic → return it unchanged.
 
 Rules:
 - Output ONLY the final standalone question.
@@ -2571,6 +2668,36 @@ Rules:
             f"base just now. Please try again in a moment, or pick one of the course topics below."
         )
 
+    @staticmethod
+    def _build_typo_alternate_prompt(typo_info: Optional[Dict[str, Any]]) -> str:
+        """
+        Build clean alternate topic prompt asking if user meant the corrected term or alternate topics.
+        Placed at the bottom of the answer content (above 'Try asking...').
+        """
+        if not typo_info or not typo_info.get("is_misspelled"):
+            return ""
+
+        corrected = str(typo_info.get("corrected_term") or "").strip()
+        related = typo_info.get("related_topics") or []
+
+        alt_links = []
+        for rt in related:
+            clean_rt = re.sub(r'^(?:Explain|Tell me about)\s+', '', str(rt), flags=re.I).strip()
+            if not clean_rt or clean_rt.lower() == corrected.lower():
+                continue
+            link = f"[{clean_rt}](#ask:{urllib.parse.quote(clean_rt)})"
+            if link not in alt_links:
+                alt_links.append(link)
+            if len(alt_links) >= 3:
+                break
+
+        if alt_links:
+            return f"Did you mean **{corrected}**, or were you looking for: {' | '.join(alt_links)}?"
+        return f"Did you mean to ask about **{corrected}**, or another maritime topic?"
+
+    _build_typo_banner = _build_typo_alternate_prompt
+
+
     async def _handle_typo_correction(
         self,
         typo_match: Dict[str, Any],
@@ -2578,22 +2705,74 @@ Rules:
         stream_callback=None,
     ) -> Dict[str, Any]:
         """
-        Stream friendly 'Did you mean...?' typo message and set related topic suggestions.
+        Seamlessly handle corrected maritime term: build rich clarification or return related topic suggestions
+        without condescending typo error messages.
         """
-        typo_text = typo_match["message"]
+        corrected_term = typo_match.get("corrected_term", "")
         typo_suggestions = typo_match.get("related_topics") or []
+
+        # Attempt to build clarification for the corrected term
+        try:
+            clar = await self.clarifier.check_and_build(
+                current_query=corrected_term,
+                standalone_query=corrected_term,
+                retrieval_chunks=[],
+                meaningful_history=[],
+                all_topic_names=[],
+            )
+            if clar:
+                clar_text = clar.render_text()
+                if stream_callback:
+                    try:
+                        for tok in re.findall(r'\S+\s*|\n+', clar_text):
+                            await stream_callback({"type": "content", "token": tok})
+                        state["_streamed_live"] = True
+                    except Exception as stream_err:
+                        logger.warning(f"Failed streaming clarification: {stream_err}")
+                state["node_response"] = {
+                    "type": "query",
+                    "content": clar_text,
+                    "sections": [],
+                    "chunks_used": [],
+                    "videos": [],
+                    "images": [],
+                    "pdfs": [],
+                    "question_suggestions": clar.suggestion_queries(),
+                    "metadata": {
+                        "routing_reason": "clarification",
+                        "needs_clarification": True,
+                        "clarification": clar.to_dict(),
+                        "category": "QUERY",
+                    },
+                }
+                state["retrieval_chunks"] = []
+                state["video_suggestions"] = []
+                state["company_answer"] = None
+                return state
+        except Exception as e:
+            logger.debug(f"Failed auto-clarification in typo correction: {e}")
+
+        # Natural, respectful response without calling out the user's typo
+        from services.clarification_service import Clarification as _Clar
+        dynamic_closing = _Clar._dynamic_fallback_closing(corrected_term)
+        resp_lines = [f"Here are key areas and guidance related to **{corrected_term}**:\n"]
+        for i, s in enumerate(typo_suggestions[:4], 1):
+            resp_lines.append(f"{i}. **[{s}](#ask:{urllib.parse.quote(s)})**")
+        resp_lines.append("")
+        resp_lines.append(dynamic_closing)
+        response_text = "\n".join(resp_lines)
 
         if stream_callback:
             try:
-                for tok in re.findall(r'\S+\s*|\n+', typo_text):
+                for tok in re.findall(r'\S+\s*|\n+', response_text):
                     await stream_callback({"type": "content", "token": tok})
                 state["_streamed_live"] = True
             except Exception as stream_err:
-                logger.warning(f"Failed streaming typo clarification: {stream_err}")
+                logger.warning(f"Failed streaming typo response: {stream_err}")
 
         state["node_response"] = {
             "type": "query",
-            "content": typo_text,
+            "content": response_text,
             "sections": [],
             "chunks_used": [],
             "videos": [],
@@ -2644,6 +2823,50 @@ Rules:
             if isinstance(msg, dict) and msg.get("role") == "user"
         ]
 
+        last_answer = None
+        for msg in reversed(cleaned_messages):
+            if isinstance(msg, dict) and msg.get("role") == "assistant":
+                last_answer = msg.get("content")
+                break
+
+        # Contextual Follow-Up: Check if the user's input is a term, acronym, or phrase
+        # that literally appeared in the assistant's previous message
+        is_term_from_last_answer = False
+        is_link_from_last_answer = False
+        last_asst_msg = next((m for m in reversed(cleaned_messages) if isinstance(m, dict) and m.get("role") == "assistant"), None)
+        if last_answer:
+            q_clean_tok = re.sub(r'[^\w\s]', '', current_query.lower()).strip()
+            if q_clean_tok and 1 <= len(q_clean_tok.split()) <= 6 and len(q_clean_tok) >= 2:
+                if re.search(r'\b' + re.escape(q_clean_tok) + r'\b', last_answer.lower()):
+                    is_term_from_last_answer = True
+                    logger.info(f"💡 [Context Continuity] Detected term '{current_query}' from assistant's previous message")
+
+            # Check if user clicked a markdown link [Text](#ask:Query) from the assistant's last message
+            ask_targets = re.findall(r'#ask:([^)\s]+)', last_answer)
+            q_norm_str = re.sub(r'[^\w\s]', '', current_query.lower()).strip()
+            for raw_t in ask_targets:
+                try:
+                    decoded_t = urllib.parse.unquote(raw_t).strip()
+                    dec_clean = re.sub(r'[^\w\s]', '', decoded_t.lower()).strip()
+                    if dec_clean and (q_norm_str == dec_clean or (len(dec_clean) >= 4 and (q_norm_str in dec_clean or dec_clean in q_norm_str))):
+                        is_link_from_last_answer = True
+                        logger.info(f"💡 [Link Click Detected] Query '{current_query}' matches #ask: target '{decoded_t}' from last answer")
+                        break
+                except Exception:
+                    pass
+
+        if not is_link_from_last_answer and last_asst_msg:
+            # Check if user clicked one of the question_suggestions chips
+            prev_suggs = last_asst_msg.get("question_suggestions") or []
+            q_norm_str = re.sub(r'[^\w\s]', '', current_query.lower()).strip()
+            for ps in prev_suggs:
+                ps_str = ps.get("query", ps.get("label", "")) if isinstance(ps, dict) else str(ps)
+                ps_clean = re.sub(r'[^\w\s]', '', str(ps_str).lower()).strip()
+                if ps_clean and (q_norm_str == ps_clean or (len(ps_clean) >= 4 and (q_norm_str in ps_clean or ps_clean in q_norm_str))):
+                    is_link_from_last_answer = True
+                    logger.info(f"💡 [Suggestion Click Detected] Query '{current_query}' matches suggestion chip from previous message")
+                    break
+
         # -----------------------------
         #  "DID YOU MEAN...?" - resolve a typed reply ("2", "cargo", "general")
         #  to the clarification the assistant asked on the previous turn
@@ -2651,6 +2874,7 @@ Rules:
         clarification: Optional[Any] = None
         general_term: Optional[str] = None
         user_declined_clarification = False
+        chosen_option: Optional[Dict[str, Any]] = None
         pending_clarification = self.clarifier.pending_from_messages(cleaned_messages)
         if pending_clarification and not skip_clarification:
             chosen_option = self.clarifier.resolve_reply(current_query, pending_clarification)
@@ -2668,10 +2892,42 @@ Rules:
                     skip_clarification = True
                     if chosen_option.get("kind") == "general":
                         general_term = parse_general_overview(current_query)
+            else:
+                # Anti-Loop Guard: The assistant asked clarification on the immediately preceding turn.
+                # Never ask a consecutive clarification question! Directly answer Turn 2.
+                logger.info(f"[CLARIFY] Follow-up to previous clarification -> enforcing skip_clarification=True")
+                skip_clarification = True
+
+        is_confirmed_clarification = bool(chosen_option and not user_declined_clarification)
+
+        # If user clicked a link or suggestion from the previous message, skip any clarification
+        if is_link_from_last_answer:
+            skip_clarification = True
 
         # "General overview of X" picked from the buttons -> answer from general knowledge
         if general_term is None and skip_clarification:
             general_term = parse_general_overview(current_query)
+
+        # -----------------------------
+        #  TYPO AUTO-CORRECTION (Silent, user-friendly query repair)
+        # -----------------------------
+        detected_typo: Optional[Dict[str, Any]] = None
+        if not is_simple_social_intent(current_query):
+            try:
+                try:
+                    all_topic_names = self.vector_store.get_all_topic_names()
+                except Exception:
+                    all_topic_names = []
+                corrected_q, typo_info = self.fuzzy_search.correct_query_typos(current_query, all_topic_names)
+                if typo_info and typo_info.get("is_misspelled"):
+                    logger.info(
+                        f"💡 [Typo Auto-Correction] Seamlessly repaired: '{typo_info['misspelled_word']}' "
+                        f"-> '{typo_info['corrected_term']}' in query: '{current_query}' -> '{corrected_q}'"
+                    )
+                    current_query = corrected_q
+                    detected_typo = typo_info
+            except Exception as e:
+                logger.debug(f"Typo auto-correction error: {e}")
 
         # -----------------------------
         #  FAST-PATH GREETING & SOCIAL INTENT DETECTION
@@ -2684,15 +2940,23 @@ Rules:
         # -----------------------------
         if not simple_social:
             words_raw = current_query.strip().split()
-            if 1 <= len(words_raw) <= 3:
-                for w in words_raw:
-                    w_token = re.sub(r'[^a-zA-Z0-9]', '', w).upper()
-                    if 2 <= len(w_token) <= 8:
-                        from services.maritime_acronyms import is_known_maritime_acronym, AMBIGUOUS_SHORT_WORDS
+            is_short_query = (1 <= len(words_raw) <= 3)
+            from services.dynamic_acronym_service import COMMON_NON_ACRONYMS
+            from services.maritime_acronyms import is_known_maritime_acronym, AMBIGUOUS_SHORT_WORDS
+            for w in words_raw:
+                w_token = re.sub(r'[^a-zA-Z0-9_\-]', '', w).upper()
+                if 2 <= len(w_token) <= 12 and w_token not in COMMON_NON_ACRONYMS and w_token not in AMBIGUOUS_SHORT_WORDS:
+                    # For short queries (<= 3 words), check any candidate; for longer questions, check uppercase, alphanumeric, or short tokens in marine domain
+                    is_candidate = (
+                        is_short_query
+                        or w.isupper()
+                        or any(c.isdigit() or c in '_-' for c in w)
+                        or (len(w_token) <= 5 and is_marine_domain_query(current_query))
+                    )
+                    if is_candidate:
                         if (
                             not is_known_maritime_acronym(w_token)
                             and not is_marine_domain_query(w_token)
-                            and w_token not in AMBIGUOUS_SHORT_WORDS
                         ):
                             try:
                                 from services.dynamic_acronym_service import dynamic_acronym_service
@@ -2706,14 +2970,25 @@ Rules:
         q_lower = current_query.lower().strip()
         words = q_lower.split()
 
-        is_quiz_or_summary = bool(re.search(
-            r'\b(quiz|quizz|mcq|test me|practice test|mock test|summary|summarize|overview|recap)\b',
+        has_explicit_marine_target = bool(find_acronyms_in_query(current_query)) or is_marine_domain_query(current_query)
+        session_summary_ref = bool(re.search(
+            r'\b(we discussed|we talked about|our discussion|our chat|our conversation|my learning|my learnings|today(?:\'s)? session|this session|what we covered|what we learned|so far)\b',
             q_lower
         ))
+        is_pure_quiz = bool(re.search(r'\b(quiz|quizz|mcq|test me|practice test|mock test)\b', q_lower))
+        is_pure_summary = bool(re.search(r'\b(summary|summarize|overview|recap)\b', q_lower))
+        is_quiz_or_summary = is_pure_quiz or (is_pure_summary and (session_summary_ref or not has_explicit_marine_target))
+
         has_coreference = bool(re.search(
-            r'\b(it|this|that|these|those|above|its|them|he|she|they|him|her|point\s*\d+|step\s*\d+|second\s*one|first\s*one|former|latter|same|again|previous|earlier)\b',
+            r'\b(it|this|that|these|those|above|its|them|he|she|they|him|her|point\s*\d+|(?:first|second|third|fourth|next)?\s*step(?:\s*\d+)?|next|second\s*one|first\s*one|former|latter|same|again|previous|earlier)\b',
             q_lower
         ))
+        # Guard: If query contains recall words ('again', 'earlier', 'back to') but explicitly names a clear maritime acronym/system
+        # (e.g., "tell me about ECDIS again", "back to COW", "what about EGCS earlier?"),
+        # do NOT treat it as a pronoun coreference! It is an explicit topic recall and must not be blended with prior turns.
+        has_pure_pronoun = bool(re.search(r'\b(it|this|that|above|these|those|point\s*\d+|step\s*\d+)\b', q_lower))
+        if has_coreference and has_explicit_marine_target and not has_pure_pronoun and re.search(r'\b(again|earlier|back to|repeat|once more|previously)\b', q_lower):
+            has_coreference = False
         is_followup_starter = q_lower.startswith((
             "and ", "what about", "how about", "why ", "why?", "how come", "also ",
             "tell more", "explain more", "more details", "what else", "what next", "continue"
@@ -2723,38 +2998,53 @@ Rules:
         is_tech_term = (
             bool(find_acronyms_in_query(current_query))
             or is_marine_domain_query(current_query)
+            or is_term_from_last_answer
             or any(w in q_lower for w in ("pump", "pumps", "valve", "valves", "bbs", "bog", "bob", "hazard", "hazards", "alarm", "alarms"))
         )
         if not is_tech_term:
             try:
-                from services.dynamic_acronym_service import dynamic_acronym_service
-                is_tech_term = any(dynamic_acronym_service.is_known_acronym(w) for w in words if 2 <= len(w) <= 10)
+                from services.dynamic_domain_service import dynamic_domain_service
+                if dynamic_domain_service.is_db_domain_match(current_query):
+                    is_tech_term = True
+                else:
+                    from services.dynamic_acronym_service import dynamic_acronym_service
+                    is_tech_term = any(dynamic_acronym_service.is_known_acronym(w) for w in words if 2 <= len(w) <= 12)
             except Exception:
                 pass
 
-        # Guard against polysemous dual-meaning terms blindly taking is_direct_marine fast path
-        is_polysemous = False
-        POLYSEMOUS_WORDS = {"squat", "draft", "draught", "bridge", "tank", "ships", "ship", "watch"}
-        matched_poly = [m for m in POLYSEMOUS_WORDS if re.search(r'\b' + re.escape(m) + r'\b', q_lower)]
-        if matched_poly and not is_obvious_marine_query(current_query):
-            has_maritime_context = bool(re.search(
-                r"\b(ship\s+squat|ship\s+draft|ship\s+draught|vessel|vessels|shipboard|navigation|shallow\s*water|under\s*keel|ukc|hydrodynamic|cargo|engine|deck|ballast|seafarer|seafarers|moor|mooring|anchor|anchoring|colreg|colregs|solas|marpol)\b",
-                q_lower,
-            ))
-            if not has_maritime_context:
-                is_polysemous = True
+        # Dynamic maritime signal strength gate — replaces the old hardcoded POLYSEMOUS_WORDS set.
+        # has_strong_marine_signal() auto-classifies every MARINE_INDICATORS term at import time:
+        #   strong = multi-word phrase OR 7+ char word OR maritime acronym.
+        # Short common English words (ship, tank, tide, deck...) are NOT strong signals.
+        # If no strong signal → must go through LLM router, which handles the classification.
+        # Fail-safe: defaults to True so existing behavior is preserved on any import error.
+        try:
+            from services.off_topic_detector import has_strong_marine_signal
+            _has_strong_signal = has_strong_marine_signal(current_query) or is_term_from_last_answer or is_tech_term
+        except Exception:
+            _has_strong_signal = True  # safe fallback: don't block existing flow
 
         is_direct_marine = (
             not simple_social
             and not is_quiz_or_summary
             and not has_coreference
             and not is_followup_starter
-            and not is_off_topic_query(current_query)
-            and not is_polysemous
             and (
-                is_obvious_marine_query(current_query)
-                or is_marine_domain_query(current_query)
-                or is_tech_term
+                is_confirmed_clarification
+                or is_link_from_last_answer
+                or (
+                    not is_off_topic_query(current_query)
+                    and (
+                        (
+                            _has_strong_signal
+                            and (
+                                is_obvious_marine_query(current_query)
+                                or is_marine_domain_query(current_query)
+                                or is_tech_term
+                            )
+                        )
+                    )
+                )
             )
         )
 
@@ -2797,13 +3087,13 @@ Rules:
         elif is_direct_marine:
             standalone_query = current_query
             node_type = "query"
-            user_category = self._normalize_category(category, "QUERY")
+            user_category = "QUERY"
             router_decision = {
                 "node_type": "query",
                 "short_topic": "marine",
                 "reason": f"Direct standalone marine query fast-path: {current_query}",
                 "user_name": None,
-                "category": user_category,
+                "category": "QUERY",
                 "standalone_query": current_query,
             }
             latencies["query_rewrite"] = 0.0
@@ -2834,6 +3124,15 @@ Rules:
                 )
             )
             standalone_query, router_decision = await asyncio.gather(rewrite_task, classify_task)
+            if standalone_query:
+                try:
+                    sq_corrected, sq_typo = self.fuzzy_search.correct_query_typos(standalone_query, all_topic_names)
+                    if sq_typo:
+                        standalone_query = sq_corrected
+                        if not detected_typo and sq_typo.get("is_misspelled"):
+                            detected_typo = sq_typo
+                except Exception:
+                    pass
             rw_cls_dur = time.perf_counter() - t_rw_cls
             latencies["query_rewrite"] = rw_cls_dur
             latencies["router_classify"] = rw_cls_dur
@@ -2845,9 +3144,30 @@ Rules:
                 "QUERY",
             )
 
-            # Guard: If router mistakenly classified a technical term / machinery query as social or off-topic, override to query
-            if is_tech_term and not simple_social and not is_off_topic_query(current_query) and not is_polysemous:
-                if node_type in ("goodbye", "greeting", "fallback", "negative", "off_topic") or router_decision.get("category") == "OFF_TOPIC":
+            # Guard: If user confirmed clarification or clicked a link from last answer,
+            # router MUST NOT classify it as off-topic or social!
+            if (is_confirmed_clarification or is_link_from_last_answer) and not simple_social:
+                logger.info(
+                    f"⚡ Enforcing 'query' route for confirmed clarification / link click: "
+                    f"'{current_query}' (chosen_option={bool(chosen_option)}, is_link={is_link_from_last_answer})"
+                )
+                node_type = "query"
+                user_category = "QUERY"
+                router_decision["node_type"] = "query"
+                router_decision["category"] = "QUERY"
+            # Guard: If router mistakenly classified a technical term / machinery query as social or off-topic, override to query.
+            # _has_strong_signal ensures we only override when the query has unambiguous maritime content
+            # (prevents garbage/ambiguous words from being forced into maritime retrieval).
+            elif is_tech_term and not simple_social and not is_off_topic_query(current_query) and _has_strong_signal:
+                tech_session_ref = bool(re.search(
+                    r'\b(we discussed|we talked about|our discussion|our chat|our conversation|my learning|my learnings|today(?:\'s)? session|this session|what we covered|what we learned|so far)\b',
+                    current_query.lower()
+                ))
+                if (
+                    node_type in ("goodbye", "greeting", "fallback", "negative", "off_topic")
+                    or router_decision.get("category") == "OFF_TOPIC"
+                    or (node_type == "summary" and not tech_session_ref)
+                ):
                     logger.info(f"⚡ Overriding false router node_type '{node_type}' to 'query' for technical term: '{current_query}'")
                     node_type = "query"
                     user_category = "QUERY"
@@ -2857,6 +3177,10 @@ Rules:
         understanding_summary = ""
 
         logger.info(f"🧠 Rewritten Query: {standalone_query} | Route: {node_type}")
+
+        question_scope = classify_question_scope(current_query, standalone_query)
+        logger.info(f"🎯 [Question Scope] Classified '{current_query}' as {question_scope}")
+        router_decision["question_scope"] = question_scope
 
         is_social = node_type in {"greeting", "goodbye", "thank", "well_wish"}
 
@@ -2967,7 +3291,6 @@ Rules:
             node_type == "query"
             and not is_social
             and not skip_clarification
-            and not detect_sms_template_intent(current_query)[0]
             and retrieval_chunks
             and not is_quiz_or_summary
             and not has_coreference
@@ -3001,27 +3324,8 @@ Rules:
                 logger.exception("[CLARIFY] clarification check failed; continuing normally")
                 clarification = None
 
-        # Check for misspelled maritime words / typos
+        # Misspelled maritime words / typos are seamlessly auto-corrected upfront
         typo_match = None
-        if (
-            node_type == "query"
-            and not is_social
-            and not general_term
-            and clarification is None
-            and not is_quiz_or_summary
-        ):
-            try:
-                try:
-                    all_topic_names = self.vector_store.get_all_topic_names()
-                except Exception:
-                    all_topic_names = []
-                typo_match = self.fuzzy_search.detect_misspelled_query(current_query, all_topic_names)
-                if typo_match:
-                    logger.info(f"💡 [Typo Detection] Found typo: {typo_match['misspelled_word']} -> {typo_match['corrected_term']}")
-                    retrieval_chunks = []
-                    video_suggestions = []
-            except Exception as e:
-                logger.debug(f"Typo check skipped on error: {e}")
 
         video_suggestions = self._normalize_video_suggestions(
             video_suggestions
@@ -3032,12 +3336,13 @@ Rules:
         # -----------------------------
         media_enrichment_task: Optional[asyncio.Task] = None
         if retrieval_chunks and not is_social and node_type in {"query", "summary", "quiz"}:
-            logger.info("🚀 Launching background media enrichment task concurrent with LLM")
+            logger.info(f"🚀 Launching background media enrichment task concurrent with LLM (scope={question_scope})")
             media_enrichment_task = asyncio.create_task(
                 self._run_media_enrichment_task(
                     retrieval_chunks,
                     current_query,
                     video_suggestions,
+                    question_scope=question_scope,
                 )
             )
 
@@ -3053,6 +3358,7 @@ Rules:
         state = {
             "current_query": current_query,
             "standalone_query": standalone_query,
+            "question_scope": question_scope,
             "understanding_summary": understanding_summary,
             "previous_questions": previous_questions,
             "retrieval_chunks": retrieval_chunks,
@@ -3071,6 +3377,8 @@ Rules:
             "category": user_category,
             "status_callback": status_callback,
             "stream_callback": stream_callback,
+            "detected_typo": detected_typo,
+            "typo_prompt": self._build_typo_alternate_prompt(detected_typo) if detected_typo else None,
         }
 
         state = {**checkpoint_state, **state}
@@ -3090,6 +3398,8 @@ Rules:
             node_type == "query"
             and not general_term
             and clarification is None
+            and not is_confirmed_clarification
+            and not is_link_from_last_answer
             and settings.enable_general_brief
             and (
                 is_off_topic_query(current_query)
@@ -3115,6 +3425,11 @@ Rules:
 
                 if general_term:
                     overview_text = await self._general_overview_answer(general_term)
+                    if detected_typo and detected_typo.get("is_misspelled"):
+                        typo_prompt = self._build_typo_alternate_prompt(detected_typo)
+                        if typo_prompt and typo_prompt.strip() not in overview_text:
+                            overview_text = (overview_text.rstrip() + "\n\n" + typo_prompt.strip()).strip()
+
                     topic_followups = [
                         o.get("query") for o in ((pending_clarification or {}).get("options") or [])
                         if o.get("kind") == "topic" and o.get("query")
@@ -3157,6 +3472,10 @@ Rules:
 
                 elif soft_general:
                     brief_text, brief_followups = soft_general
+                    if detected_typo and detected_typo.get("is_misspelled"):
+                        typo_prompt = self._build_typo_alternate_prompt(detected_typo)
+                        if typo_prompt and typo_prompt.strip() not in brief_text:
+                            brief_text = (brief_text.rstrip() + "\n\n" + typo_prompt.strip()).strip()
 
                     if stream_callback:
                         try:
@@ -3189,6 +3508,11 @@ Rules:
                     clar_text = clarification.render_text()
                     clar_payload = clarification.to_dict()
 
+                    if detected_typo and detected_typo.get("is_misspelled"):
+                        typo_prompt = self._build_typo_alternate_prompt(detected_typo)
+                        if typo_prompt and typo_prompt.strip() not in clar_text:
+                            clar_text = (clar_text.rstrip() + "\n\n" + typo_prompt.strip()).strip()
+
                     if stream_callback:
                         try:
                             for tok in re.findall(r'\S+\s*|\n+', clar_text):
@@ -3217,19 +3541,19 @@ Rules:
                     }
                     state["retrieval_chunks"] = []
                     state["video_suggestions"] = []
-                    state["company_answer"] = None
-
-                elif typo_match is not None:
-                    state = await self._handle_typo_correction(typo_match, state, stream_callback)
-
                 elif (
-                    is_off_topic_query(current_query)
-                    or is_off_topic_query(standalone_query)
-                    or (
-                        (user_category == "OFF_TOPIC" or router_decision.get("category") == "OFF_TOPIC")
-                        and not is_tech_term
-                        and not is_marine_domain_query(current_query)
-                        and not is_marine_domain_query(standalone_query)
+                    not is_confirmed_clarification
+                    and not is_link_from_last_answer
+                    and not user_declined_clarification
+                    and (
+                        is_off_topic_query(current_query)
+                        or is_off_topic_query(standalone_query)
+                        or (
+                            (user_category == "OFF_TOPIC" or router_decision.get("category") == "OFF_TOPIC")
+                            and not is_tech_term
+                            and not is_marine_domain_query(current_query)
+                            and not is_marine_domain_query(standalone_query)
+                        )
                     )
                 ):
 
@@ -3319,176 +3643,69 @@ Rules:
 
                 else:
 
-                    # -------------------------------------------------------------
-                    # 📋 SMS FORM / PERMIT TEMPLATE HANDLING
-                    # -------------------------------------------------------------
-                    sms_intent, sms_target = detect_sms_template_intent(current_query)
-                    user_prof = state.get("user_profile") or {}
-                    user_comp_id = user_prof.get("company_id")
-                    user_ship_type = (user_prof.get("ship_type") or "").strip()
-                    user_ship_name = user_prof.get("ship_name") or user_prof.get("ship") or "[ Vessel Name ]"
-
-                    if sms_intent == "DISCOVERY" and user_comp_id:
-                        logger.info(f"📋 SMS Template DISCOVERY: company={user_comp_id}, vessel={user_ship_name} ({user_ship_type})")
-                        pool = await self.session_service._get_pool()
-                        catalog = await get_company_template_catalog(pool, user_comp_id, user_ship_type)
-
-                        if catalog:
-                            catalog_lines = [
-                                f"Here are the official SMS templates and permits available for **{user_ship_name}** ({user_ship_type or 'Fleet'}):",
-                                "",
-                                "### 📋 Available Permits & Checklists:",
-                            ]
-                            for idx, (name, _) in enumerate(catalog, 1):
-                                catalog_lines.append(f"{idx}. **{name}**")
-                            catalog_lines.append("")
-                            catalog_lines.append("Tap any of the suggestions below to load that template directly.")
-                            catalog_text = "\n".join(catalog_lines)
-                            suggestions = [item[0] for item in catalog[:6]]
-                        else:
-                            catalog_text = f"No specific SMS templates found in documentation for **{user_ship_name}**. Please ensure company SMS manuals are uploaded."
-                            suggestions = []
-
-                        if stream_callback:
-                            try:
-                                for tok in re.findall(r'\S+\s*|\n+', catalog_text):
-                                    await stream_callback({"type": "content", "token": tok})
-                                state["_streamed_live"] = True
-                            except Exception as stream_err:
-                                logger.warning(f"Failed streaming catalog: {stream_err}")
-
-                        state["node_response"] = {
-                            "type": "query",
-                            "content": catalog_text,
-                            "sections": [],
-                            "chunks_used": [],
-                            "videos": [],
-                            "images": [],
-                            "pdfs": [],
-                            "question_suggestions": suggestions,
-                            "metadata": {
-                                "routing_reason": "sms_template_discovery",
-                                "is_sms_template_discovery": True,
-                                "category": "QUERY",
-                            },
-                        }
-                        state["retrieval_chunks"] = []
-                        state["video_suggestions"] = []
-                        state["company_answer"] = None
-
-                    elif sms_intent == "SPECIFIC" and user_comp_id and sms_target:
-                        logger.info(f"📋 SPECIFIC SMS Template: '{sms_target}' for vessel={user_ship_name} ({user_ship_type})")
-                        if status_callback:
-                            try:
-                                await status_callback("generating", f"Retrieving {sms_target} template...")
-                            except Exception as e:
-                                logger.warning(f"Status callback failed: {e}")
-
-                        pool = await self.session_service._get_pool()
-                        doc_title, doc_content = await fetch_template_document_data(
-                            pool, user_comp_id, user_ship_type, sms_target
+                    # 🚀 STRATEGY 3: Parallelize Company & Course Retrieval
+                    t_ret_start = time.perf_counter()
+                    user_comp_id = (state.get("user_profile") or {}).get("company_id")
+                    if user_comp_id:
+                        logger.info("⚡ Concurrently executing Course and Company Retrieval nodes")
+                        course_task = asyncio.create_task(
+                            retrieval_node(state, self.vector_store, None)
                         )
-
-                        if doc_content:
-                            state["company_chunks"] = [{"content": doc_content, "document_title": doc_title}]
-                            state["template_document_title"] = doc_title or sms_target
-                            state = await company_template_query_node(state, self.openai_service)
-                            template_ans = state.get("company_answer") or ""
-                        else:
-                            template_ans = f"Sorry, the specific template for **{sms_target}** could not be found in the SMS documents for **{user_ship_name}**."
-
-                        if stream_callback and template_ans:
-                            try:
-                                for tok in re.findall(r'\S+\s*|\n+', template_ans):
-                                    await stream_callback({"type": "content", "token": tok})
-                                state["_streamed_live"] = True
-                            except Exception as stream_err:
-                                logger.warning(f"Failed streaming template: {stream_err}")
-
-                        state["node_response"] = {
-                            "type": "query",
-                            "content": template_ans,
-                            "sections": [],
-                            "chunks_used": [],
-                            "videos": [],
-                            "images": [],
-                            "pdfs": [],
-                            # CRITICAL: User knows the template name, so DO NOT give suggestion chips!
-                            "question_suggestions": [],
-                            "metadata": {
-                                "routing_reason": "sms_template_specific",
-                                "is_sms_template": True,
-                                "category": "QUERY",
-                            },
-                        }
-                        state["retrieval_chunks"] = []
-                        state["video_suggestions"] = []
-                        state["company_answer"] = None
-
+                        company_task = asyncio.create_task(
+                            company_retrieval_node(state, self.company_vector_store)
+                        )
+                        state_res, state_comp = await asyncio.gather(course_task, company_task)
+                        state = state_res
+                        state["company_chunks"] = state_comp.get("company_chunks", [])
                     else:
-                        # 🚀 STRATEGY 3: Parallelize Company & Course Retrieval
-                        t_ret_start = time.perf_counter()
-                        user_comp_id = (state.get("user_profile") or {}).get("company_id")
-                        if user_comp_id:
-                            logger.info("⚡ Concurrently executing Course and Company Retrieval nodes")
-                            course_task = asyncio.create_task(
-                                retrieval_node(state, self.vector_store, None)
-                            )
-                            company_task = asyncio.create_task(
-                                company_retrieval_node(state, self.company_vector_store)
-                            )
-                            state_res, state_comp = await asyncio.gather(course_task, company_task)
-                            state = state_res
-                            state["company_chunks"] = state_comp.get("company_chunks", [])
-                        else:
-                            state = await retrieval_node(
-                                state,
-                                self.vector_store,
-                                None
-                            )
-                            state["company_chunks"] = []
+                        state = await retrieval_node(
+                            state,
+                            self.vector_store,
+                            None
+                        )
+                        state["company_chunks"] = []
 
-                        dur_ret = time.perf_counter() - t_ret_start
-                        latencies["retrieval_node"] = dur_ret
-                        latencies["company_retrieval"] = dur_ret if user_comp_id else 0.0
-                        logger.info(f"⏱️ [Timer] Concurrent Course & Company Retrieval: {dur_ret:.2f}s")
+                    dur_ret = time.perf_counter() - t_ret_start
+                    latencies["retrieval_node"] = dur_ret
+                    latencies["company_retrieval"] = dur_ret if user_comp_id else 0.0
+                    logger.info(f"⏱️ [Timer] Concurrent Course & Company Retrieval: {dur_ret:.2f}s")
 
-                        if status_callback:
-                            try:
-                                await status_callback("generating", "Dolphin is generating response...")
-                            except Exception as e:
-                                logger.warning(f"Status callback failed: {e}")
+                    if status_callback:
+                        try:
+                            await status_callback("generating", "Dolphin is generating response...")
+                        except Exception as e:
+                            logger.warning(f"Status callback failed: {e}")
 
-                        # Parallelize query_node and company_query_node if company_chunks exist
-                        t_gen = time.perf_counter()
-                        if state.get("company_chunks"):
-                            course_task = asyncio.create_task(
-                                query_node(
-                                    state,
-                                    self.openai_service,
-                                    self.suggestion_service,
-                                    self.vector_store,
-                                )
-                            )
-                            company_task = asyncio.create_task(
-                                company_query_node(
-                                    state,
-                                    self.openai_service,
-                                )
-                            )
-                            state_res, comp_res = await asyncio.gather(course_task, company_task)
-                            state = state_res
-                            state["company_answer"] = comp_res.get("company_answer")
-                        else:
-                            state = await query_node(
+                    # Parallelize query_node and company_query_node if company_chunks exist
+                    t_gen = time.perf_counter()
+                    if state.get("company_chunks"):
+                        course_task = asyncio.create_task(
+                            query_node(
                                 state,
                                 self.openai_service,
                                 self.suggestion_service,
                                 self.vector_store,
                             )
-                            state["company_answer"] = None
-                        latencies["answer_generation"] = time.perf_counter() - t_gen
-                        logger.info(f"⏱️ [Timer] Answer Generation (OpenAI LLM): {latencies['answer_generation']:.2f}s")
+                        )
+                        company_task = asyncio.create_task(
+                            company_query_node(
+                                state,
+                                self.openai_service,
+                            )
+                        )
+                        state_res, comp_res = await asyncio.gather(course_task, company_task)
+                        state = state_res
+                        state["company_answer"] = comp_res.get("company_answer")
+                    else:
+                        state = await query_node(
+                            state,
+                            self.openai_service,
+                            self.suggestion_service,
+                            self.vector_store,
+                        )
+                        state["company_answer"] = None
+                    latencies["answer_generation"] = time.perf_counter() - t_gen
+                    logger.info(f"⏱️ [Timer] Answer Generation (OpenAI LLM): {latencies['answer_generation']:.2f}s")
 
             elif node_type == "greeting":
 
@@ -3514,6 +3731,22 @@ Rules:
 
             elif node_type == "negative":
                 state = await negative_node(state)
+
+            elif node_type == "summary":
+                if status_callback:
+                    try:
+                        await status_callback("generating", "Dolphin is generating summary...")
+                    except Exception as e:
+                        logger.warning(f"Status callback failed: {e}")
+                state = await summary_node(state, self.openai_service, self.suggestion_service)
+
+            elif node_type == "quiz":
+                if status_callback:
+                    try:
+                        await status_callback("generating", "Dolphin is preparing quiz...")
+                    except Exception as e:
+                        logger.warning(f"Status callback failed: {e}")
+                state = await quiz_node(state, self.openai_service, self.suggestion_service)
 
             else:
                 if user_declined_clarification:
@@ -3633,14 +3866,18 @@ Rules:
             video_suggestions = self._build_video_suggestions(retrieval_chunks)
 
         is_resp_out_of_scope = (
-            (validated.metadata or {}).get("out_of_scope") is True
-            or is_off_topic_query(current_query)
-            or any(
-                s.get("topic_name", "").strip().lower() in ("out of scope", "off topic", "unrelated")
-                or "outside the marine training curriculum" in s.get("content", "").lower()
-                or "outside the maritime curriculum" in s.get("content", "").lower()
-                or "specialized exclusively in maritime" in s.get("content", "").lower()
-                for s in (validated.sections or [])
+            not is_confirmed_clarification
+            and not is_link_from_last_answer
+            and (
+                (validated.metadata or {}).get("out_of_scope") is True
+                or is_off_topic_query(current_query)
+                or any(
+                    s.get("topic_name", "").strip().lower() in ("out of scope", "off topic", "unrelated")
+                    or "outside the marine training curriculum" in s.get("content", "").lower()
+                    or "outside the maritime curriculum" in s.get("content", "").lower()
+                    or "specialized exclusively in maritime" in s.get("content", "").lower()
+                    for s in (validated.sections or [])
+                )
             )
         )
         is_clarification = (
@@ -3648,8 +3885,19 @@ Rules:
             or bool((validated.metadata or {}).get("needs_clarification"))
             or bool((validated.metadata or {}).get("clarification"))
         )
-        is_sms_template_response = bool((validated.metadata or {}).get("is_sms_template") or (validated.metadata or {}).get("is_sms_template_discovery"))
-        if is_resp_out_of_scope or is_social or is_clarification or is_sms_template_response:
+
+        # Append typo alternate prompt below the content (above 'Try asking...') if user query had a typo
+        if detected_typo and detected_typo.get("is_misspelled") and not is_social and not is_resp_out_of_scope:
+            typo_prompt = self._build_typo_alternate_prompt(detected_typo)
+            if typo_prompt and typo_prompt.strip() not in (assistant_content or ""):
+                assistant_content = (assistant_content.rstrip() + "\n\n" + typo_prompt.strip()).strip()
+                validated.content = assistant_content
+                if validated.sections:
+                    last_sec = validated.sections[-1]
+                    if isinstance(last_sec, dict) and "content" in last_sec:
+                        if typo_prompt.strip() not in last_sec.get("content", ""):
+                            last_sec["content"] = (last_sec.get("content", "").rstrip() + "\n\n" + typo_prompt.strip()).strip()
+        if is_resp_out_of_scope or is_social or is_clarification:
             if media_enrichment_task and not media_enrichment_task.done():
                 media_enrichment_task.cancel()
             all_images = []
@@ -3665,11 +3913,11 @@ Rules:
                 except Exception as e:
                     logger.exception(f"❌ Background media enrichment failed: {e}")
                     all_images, all_pdfs, final_videos, media_sub_timings, total_media_time = await self._run_media_enrichment_task(
-                        retrieval_chunks, current_query, video_suggestions
+                        retrieval_chunks, current_query, video_suggestions, question_scope=question_scope
                     )
             else:
                 all_images, all_pdfs, final_videos, media_sub_timings, total_media_time = await self._run_media_enrichment_task(
-                    retrieval_chunks, current_query, video_suggestions
+                    retrieval_chunks, current_query, video_suggestions, question_scope=question_scope
                 )
 
             all_topic_codes = []
@@ -3699,15 +3947,35 @@ Rules:
                 f"db_query={latencies['media_db_query']:.3f}s"
             )
 
+        # Check if the generated response indicates the requested information is not in the course
+        resp_lower = " ".join(getattr(s, "content", "") for s in getattr(validated, "sections", [])).lower()
+        if any(neg in resp_lower for neg in [
+            "not available in the curriculum",
+            "not detailed in the provided course",
+            "not explicitly stated in the provided course",
+            "not present in the provided course",
+            "does not contain information",
+            "does not contain a specific module",
+            "does not cover",
+        ]):
+            logger.info("🚫 Suppressing media because requested topic is not available in course")
+            all_images = []
+            all_pdfs = []
+            final_videos = []
+
         # Synchronize validated model
         validated.images = all_images
         validated.pdfs = all_pdfs
         validated.videos = final_videos
         validated.video_suggestions = final_videos
+        if validated.metadata is None:
+            validated.metadata = {}
+        validated.metadata["question_scope"] = question_scope
 
         metadata_to_save = {
             **(validated.metadata or {}),
             "category": validated.metadata.get("category", "QUERY"),
+            "question_scope": question_scope,
             "images": all_images,
             "pdfs": all_pdfs,
             "videos": final_videos,
@@ -3759,6 +4027,7 @@ Rules:
                 "images": [] if (is_resp_out_of_scope or is_social or is_clarification) else all_images,
                 "pdfs": [] if (is_resp_out_of_scope or is_social or is_clarification) else all_pdfs,
                 "topic_codes": [] if (is_resp_out_of_scope or is_social or is_clarification) else all_topic_codes,
+                "question_scope": question_scope,
                 "company_answer": None if (is_resp_out_of_scope or is_social or is_clarification) else company_answer,
                 "clarification": clarification_payload if is_clarification else None,
                 "latencies": latencies,

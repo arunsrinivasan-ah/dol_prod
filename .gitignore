@@ -57,5 +57,9 @@ data/checkpoints/
 .DS_Store
 Thumbs.db
 .idea/
-.vscode/
-*.swp
+# Scratch, logs and backups
+*.bak
+*.json.bak
+**/scratch/
+**/faiss_sync_history/
+*.log

@@ -27,6 +27,7 @@ from services.openai_service import OpenAIService
 from services.session_service import SessionService
 from retrieval.faiss_store import FAISSStore
 from core.redis_client import redis_service
+from services.suggestion_service import SuggestionService
 from models.database import get_pool
 from services.query_analyzer import is_simple_social_intent, is_greeting_query
 
@@ -185,6 +186,11 @@ async def chat(
     print("=" * 68 + "\n")
 
     logger.info("Chat success")
+
+    if node_response and getattr(node_response, "question_suggestions", None):
+        node_response.question_suggestions = [
+            SuggestionService.to_suggestion_pair(item) for item in node_response.question_suggestions
+        ]
 
     return node_response
 
@@ -483,12 +489,14 @@ async def chat1(
                         yield f"data: {json.dumps(content_data)}\n\n"
                         await asyncio.sleep(0)
 
-            # suggestions
+            # suggestions (structured pairs of 2-3 word label and full query)
+            raw_suggestions = node_response.question_suggestions or []
+            paired_suggestions = [
+                SuggestionService.to_suggestion_pair(item) for item in raw_suggestions
+            ]
             suggestions_payload = {
                 "type": "suggestions",
-                "question_suggestions": (
-                    node_response.question_suggestions
-                )
+                "question_suggestions": paired_suggestions,
             }
 
             yield (
@@ -510,16 +518,29 @@ async def chat1(
                 or getattr(node_response, "category", "") in ("GREETING", "GOODBYE", "THANK", "WELL_WISH")
             )
 
-            if is_stream_out_of_scope or is_resp_social or suppress_extras:
+            resp_content_str = " ".join(getattr(s, "content", "") for s in getattr(node_response, "sections", [])).lower()
+            is_course_missing = any(neg in resp_content_str for neg in [
+                "not available in the curriculum",
+                "not detailed in the provided course",
+                "not explicitly stated in the provided course",
+                "not present in the provided course",
+                "does not contain information",
+                "does not contain a specific module",
+                "does not cover",
+            ])
+
+            if is_stream_out_of_scope or is_resp_social or suppress_extras or is_course_missing:
                 media_videos = []
                 media_images = []
                 media_pdfs = []
                 media_topic_codes = []
             else:
-                media_videos = media.get("videos", []) or getattr(node_response, "videos", []) or []
-                media_images = media.get("images", []) or getattr(node_response, "images", []) or []
-                media_pdfs = media.get("pdfs", []) or getattr(node_response, "pdfs", []) or []
-                media_topic_codes = media.get("topic_codes", [])
+                # The final filtered media payload is authoritative.
+                # If scope filtering returns an empty list, keep it empty and do NOT fall back to node_response.
+                media_videos = media["videos"] if (isinstance(media, dict) and "videos" in media) else (getattr(node_response, "videos", None) or [])
+                media_images = media["images"] if (isinstance(media, dict) and "images" in media) else (getattr(node_response, "images", None) or [])
+                media_pdfs = media["pdfs"] if (isinstance(media, dict) and "pdfs" in media) else (getattr(node_response, "pdfs", None) or [])
+                media_topic_codes = media.get("topic_codes", []) if isinstance(media, dict) else (getattr(node_response, "topic_codes", None) or [])
 
             if not is_stream_out_of_scope and not is_resp_social and not suppress_extras:
                 media_payload = {
@@ -558,6 +579,14 @@ async def chat1(
             else:
                 transcript_chunks = await transcript_task
 
+            stream_scope = (
+                (media.get("question_scope") if isinstance(media, dict) else None)
+                or (node_response.metadata or {}).get("question_scope")
+                or "GENERAL"
+            )
+            from services.question_scope import extract_specific_subject_terms, SCOPE_SPECIFIC
+            specific_terms = extract_specific_subject_terms(user_content) if stream_scope == SCOPE_SPECIFIC else set()
+
             unique_chunks = []
             seen_videos = set()
             query_lower = (user_content or "").lower()
@@ -583,16 +612,25 @@ async def chat1(
                 if has_conflicting_acronym(user_content, title_lower):
                     continue
 
-                # Filter out generic intro videos if query didn't ask for intro
+                # Filter out generic intro videos if query didn't ask for intro or if query is specific
                 is_intro = any(w in title_lower for w in ["introduction", "intro to", "overview", "course overview", "welcome", "module overview"])
-                if is_intro and not query_asked_intro:
-                    has_match = any(qw in title_lower for qw in effective_terms) if effective_terms else False
-                    if not has_match:
-                        continue
+                if is_intro:
+                    if stream_scope == SCOPE_SPECIFIC or not query_asked_intro:
+                        has_match = any(qw in title_lower for qw in effective_terms) if (effective_terms and stream_scope != SCOPE_SPECIFIC) else False
+                        if not has_match:
+                            continue
 
-                # Strict relevance check for transcript videos:
-                # If effective terms exist, ensure the video title or content matches at least one term
-                if effective_terms:
+                # Specific scope relevance check:
+                if stream_scope == SCOPE_SPECIFIC and specific_terms:
+                    chunk_text = f"{title_lower} {str(chunk.get('content') or '').lower()}"
+                    has_spec_match = any(
+                        re.search(r'\b' + re.escape(st) + r'\b', chunk_text)
+                        for st in specific_terms
+                    )
+                    if not has_spec_match:
+                        continue
+                elif effective_terms:
+                    # General / fallback relevance check:
                     chunk_text = f"{title_lower} {str(chunk.get('content') or '').lower()}"
                     has_term_match = any(qw in chunk_text for qw in effective_terms)
                     if not has_term_match:
@@ -603,7 +641,7 @@ async def chat1(
                 if len(unique_chunks) >= 5:
                     break
 
-            if not is_stream_out_of_scope and not is_resp_social and not suppress_extras and unique_chunks:
+            if not is_stream_out_of_scope and not is_resp_social and not suppress_extras and not is_course_missing and unique_chunks:
                 yield (
                     "data: "
                     + json.dumps(
@@ -685,3 +723,4 @@ async def chat1(
             "Content-Encoding": "identity",
         }
     )
+

@@ -36,20 +36,56 @@ import StopRoundedIcon from "@mui/icons-material/StopRounded";
 
 const formatGlossaryContent = (content) => {
   if (!content) return "";
-  return content.replace(
-    /([A-Z][A-Z\s]{2,}):\s*([\s\S]+?)(?=(?:[A-Z][A-Z\s]{2,}:)|$)/g,
-    (_, title, desc) =>
-      `\n- **${title
-        .trim()
-        .toLowerCase()
-        .replace(/\b\w/g, (c) => c.toUpperCase())}**: ${desc.trim()}\n`,
-  );
+  // Only convert standalone, unbulleted raw glossary lines (e.g., "ECDIS: Electronic Chart...")
+  // Do NOT touch lines that are already markdown list items (- , * , • ) or already bolded (**...)
+  const lines = content.split(/\r?\n/);
+  const formattedLines = lines.map((line) => {
+    const trimmed = line.trim();
+    if (
+      !trimmed ||
+      /^[•\-\*\⁃\◦\▪\▫\–\d\.]/.test(trimmed) ||
+      trimmed.startsWith("#") ||
+      trimmed.startsWith("**")
+    ) {
+      return line;
+    }
+    const match = trimmed.match(/^([A-Z][A-Za-z0-9\s]{1,30}):\s+(.+)$/);
+    if (match) {
+      const term = match[1].trim();
+      const desc = match[2].trim();
+      return `- **${term}**: ${desc}`;
+    }
+    return line;
+  });
+  return formattedLines.join("\n");
 };
 
 export const formatMarkdownContent = (content) => {
   if (!content) return "";
 
-  let formatted = formatGlossaryContent(content);
+  // ── Protection Layer: Preserve Images, Data URIs, and Code Blocks ──
+  // Prevents downstream formula/glossary regexes from corrupting Base64 image payloads or code blocks
+  const protectedTokens = [];
+  const mask = (match) => {
+    const token = `@@PROTECTED_CONTENT_${protectedTokens.length}@@`;
+    protectedTokens.push(match);
+    return token;
+  };
+
+  // 1. Mask code blocks first (fenced and inline)
+  let masked = content.replace(/```[\s\S]*?```/g, mask);
+  masked = masked.replace(/`[^`\n]+`/g, mask);
+
+  // 2. Mask markdown images: ![alt](url)
+  masked = masked.replace(/!\[[\s\S]*?\]\([\s\S]*?\)/g, mask);
+
+  // 3. Mask HTML img tags: <img ... />
+  masked = masked.replace(/<img\b[^>]*\/?>/gi, mask);
+
+  // 4. Mask any standalone data URIs
+  masked = masked.replace(/data:image\/[^;]+;base64,[a-zA-Z0-9+/=]+/gi, mask);
+
+  let formatted = formatGlossaryContent(masked);
 
   // Remove thinking text
   formatted = formatted.replace(/Dolphin is thinking\.\.\./gi, "");
@@ -178,6 +214,41 @@ export const formatMarkdownContent = (content) => {
     formatted += "*";
   }
 
+  // ── Dynamic Maritime Formula & Subscript Formatting ──
+  // 1. Dynamic wind/heeling levers: lw1, lw2, l_w1, l_w2 -> <var>l</var><sub>w1</sub>, <var>l</var><sub>w2</sub>, etc.
+  formatted = formatted.replace(/(?<!<var[^>]*>)\b[lL]_?w([0-9a-zA-Z]+)\b(?!<\/sub>)/g, "<var>l</var><sub>w$1</sub>");
+  formatted = formatted.replace(/\bl(?=<sub>w[0-9a-zA-Z]+<\/sub>)/gi, "<var>l</var>");
+
+  // 2. Universal Greek variable + Subscript pattern: ϕ0, ϕ1, ϕ2, ϕf, θf, etc. (dynamic for any symbol & index)
+  formatted = formatted.replace(
+    /(?<=^|[^a-zA-Z0-9<>/])([ϕφθλαβγμρσΔ])_?([0-9a-z])(?![a-zA-Z0-9<>/])/gi,
+    "<var>$1</var><sub>$2</sub>"
+  );
+
+  // 3. Common maritime variables with subscripts: GM0, GM_0, GMo
+  formatted = formatted.replace(/\b(?:GMo|GM0|GM_0)\b(?!<\/sub>)/g, "<var>GM</var><sub>0</sub>");
+
+  // 4. Universal units with power exponents: m3, m2, cm3, cm2, mm3, etc.
+  formatted = formatted.replace(/\b(\d+)\s*(m|cm|mm|km)([23])\b(?!<\/sup>)/gi, "$1 $2<sup>$3</sup>");
+
+  // 5. Maritime emissions, gases, and chemicals
+  formatted = formatted.replace(/\bCO2\b(?!<\/sub>)/g, "CO<sub>2</sub>");
+  formatted = formatted.replace(/\bSOx\b(?!<\/sub>)/g, "SO<sub>x</sub>");
+  formatted = formatted.replace(/\bNOx\b(?!<\/sub>)/g, "NO<sub>x</sub>");
+  formatted = formatted.replace(/\bH2S\b(?!<\/sub>)/g, "H<sub>2</sub>S");
+  formatted = formatted.replace(/\bCH4\b(?!<\/sub>)/g, "CH<sub>4</sub>");
+  formatted = formatted.replace(/\bO2\b(?!<\/sub>)/g, "O<sub>2</sub>");
+  formatted = formatted.replace(/\bN2\b(?!<\/sub>)/g, "N<sub>2</sub>");
+  formatted = formatted.replace(/\bH2O\b(?!<\/sub>)/g, "H<sub>2</sub>O");
+
+  // Wrap remaining standalone mathematical variables and Greek symbols in <var>
+  formatted = formatted.replace(/(?<!<var[^>]*>)(ϕ|φ|θ|Δ|α|β|γ|λ|μ|π|ρ|σ|Σ|Ω)(?!<\/var>)/g, "<var>$1</var>");
+
+  // ── Restoration Layer: Restore Protected Images, Data URIs, and Code Blocks ──
+  for (let i = protectedTokens.length - 1; i >= 0; i--) {
+    formatted = formatted.replace(`@@PROTECTED_CONTENT_${i}@@`, () => protectedTokens[i]);
+  }
+
   return formatted.trim();
 };
 export const sanitizeMarkdown = (content, skipFormatting = false) => {
@@ -190,7 +261,12 @@ export const sanitizeMarkdown = (content, skipFormatting = false) => {
     breaks: true,
   });
 
-  return DOMPurify.sanitize(html);
+  return DOMPurify.sanitize(html, {
+    ADD_TAGS: ["input", "sub", "sup", "var"],
+    ADD_ATTR: ["type", "checked", "disabled", "style", "class"],
+    ADD_DATA_URI_TAGS: ["img"],
+    ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp|data):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+  });
 };
 
 // ─── Normalisers ──

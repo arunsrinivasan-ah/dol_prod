@@ -64,7 +64,7 @@ def test_temperature_triggers_clarification(svc):
         if o.kind != "other":
             assert len(o.query.split()) >= 3
     assert len(clar.suggestion_queries()) == 3
-    assert "1. **Engine Cooling Water Temperature**" in clar.render_text()
+    assert "1. **[Engine Cooling Water Temperature]" in clar.render_text()
 
 
 def test_single_matching_topic_is_not_ambiguous(svc):
@@ -346,3 +346,55 @@ def test_is_definitional_question(q, expected):
 ])
 def test_definitional_term(q, expected):
     assert definitional_term(q) == expected
+
+
+def test_llm_dynamic_closing_in_render_text():
+    custom_closing = "Tap any topic above to explore operating limits, or let me know the specific system you are working on today!"
+    payload = {
+        "ambiguous": True,
+        "intro": "Temperature is how hot or cold something is.",
+        "question": "Which part of it do you want to explore?",
+        "closing": custom_closing,
+        "options": [
+            {"label": "Cargo temperature", "topic_ids": [1], "query": "How is cargo temperature controlled?"},
+            {"label": "Engine temperature", "topic_ids": [2], "query": "What are normal engine temperatures?"},
+        ],
+    }
+    svc = ClarificationService(openai_service=FakeLLM(payload), use_llm=True)
+    clar = run(svc.maybe_clarify("temperature", [chunk(n) for n in TOPICS[:3]], TOPICS))
+    assert clar.closing == custom_closing
+    text = clar.render_text()
+    assert text.endswith(custom_closing)
+    assert "Tap one of the options, or just tell me what you're after" not in text
+
+
+def test_fallback_dynamic_closing_not_hardcoded(svc):
+    clar = run(svc.maybe_clarify("temperature", [chunk(n) for n in TOPICS[:3]], TOPICS))
+    text = clar.render_text()
+    # Ensure the old repetitive hardcoded line is completely gone
+    assert "Tap one of the options, or just tell me what you're after and I'll find it." not in text
+    # Ensure there is an interactive prompt at the end
+    last_line = text.strip().split("\n")[-1]
+    assert len(last_line) > 10
+    assert any(w in last_line.lower() for w in ("tap", "select", "click", "choose", "pick", "options", "topics"))
+
+
+def test_typo_autocorrection_in_fuzzy_service():
+    from services.fuzzy_search_service import FuzzySearchService
+    fuzzy = FuzzySearchService()
+    fuzzy.database_topics = TOPICS
+    
+    # Test typos like 'teamprature' or 'teampareture'
+    corrected_q, match = fuzzy.correct_query_typos("teamprature", TOPICS)
+    assert match is not None
+    assert match["misspelled_word"] == "teamprature"
+    assert match["corrected_term"].lower() == "temperature"
+    assert corrected_q.lower() == "temperature"
+
+    # Test sentence containing typo
+    sentence = "what is the normal teamprature of jacket water"
+    corrected_sent, match_sent = fuzzy.correct_query_typos(sentence, TOPICS)
+    assert match_sent is not None
+    assert match_sent["misspelled_word"] == "teamprature"
+    assert "temperature" in corrected_sent.lower()
+
