@@ -34,6 +34,7 @@ import {
   handleSmartPaste,
   readImageAsBase64,
   insertAtCursor,
+  wrapSelectionOrInsert,
 } from "../../utils/markdownPasteHelper";
 
 const SUGGESTED_QUICK_TOPICS = [
@@ -779,6 +780,59 @@ const PendingDetailView = ({
             <div style={{ fontSize: 11, color: "var(--fb-primary)", backgroundColor: "rgba(16, 107, 163, 0.08)", border: "1px solid rgba(16, 107, 163, 0.2)", padding: "6px 12px", borderRadius: 8, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
               <span>💡 <strong>Smart Paste enabled:</strong> Paste Word/PDF text directly to keep bold (<code>**</code>), headings (<code>###</code>), and math formulas (<code>ϕ</code>), or paste diagram screenshots (<code>Ctrl+V</code>) directly!</span>
             </div>
+
+            {editorTab === 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 5, marginBottom: 10, padding: "6px 10px", backgroundColor: "var(--fb-bg-default)", border: "1px solid var(--fb-border)", borderRadius: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--fb-text-secondary)", marginRight: 3 }}>Quick Symbols:</span>
+                {[
+                  { label: "ϕ (Phi)", val: "ϕ", isTag: false },
+                  { label: "ϕf (Flood)", val: "ϕ<sub>f</sub>", isTag: false, tooltip: "Angle of down-flooding (ϕf)" },
+                  { label: "ϕ₀", val: "ϕ<sub>0</sub>", isTag: false, tooltip: "Angle of equilibrium (ϕ0)" },
+                  { label: "ϕ₁", val: "ϕ<sub>1</sub>", isTag: false, tooltip: "Angle of roll to windward (ϕ1)" },
+                  { label: "lw₁", val: "l<sub>w1</sub>", isTag: false, tooltip: "Steady wind heeling lever (lw1)" },
+                  { label: "lw₂", val: "l<sub>w2</sub>", isTag: false, tooltip: "Gust wind heeling lever (lw2)" },
+                  { label: "GM₀", val: "GM<sub>0</sub>", isTag: false, tooltip: "Initial metacentric height (GM0)" },
+                  { label: "θ (Theta)", val: "θ", isTag: false },
+                  { label: "Δ (Delta)", val: "Δ", isTag: false },
+                  { label: "°", val: "°", isTag: false, tooltip: "Degree symbol" },
+                  { label: "±", val: "±", isTag: false },
+                  { label: "≤", val: "≤", isTag: false },
+                  { label: "≥", val: "≥", isTag: false },
+                  { label: "x₂ Sub", prefix: "<sub>", suffix: "</sub>", isTag: true, tooltip: "Wrap selection or insert subscript (x₂)" },
+                  { label: "x² Super", prefix: "<sup>", suffix: "</sup>", isTag: true, tooltip: "Wrap selection or insert superscript (x²)" },
+                ].map((sym, sIdx) => (
+                  <button
+                    key={sIdx}
+                    type="button"
+                    title={sym.tooltip || `Insert ${sym.label}`}
+                    onClick={() => {
+                      if (sym.isTag) {
+                        wrapSelectionOrInsert(preferredTextareaRef.current, sym.prefix, sym.suffix, preferredResponse, setPreferredResponse);
+                      } else {
+                        insertAtCursor(preferredTextareaRef.current, sym.val, preferredResponse, setPreferredResponse);
+                      }
+                    }}
+                    style={{
+                      padding: "3px 8px",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      fontFamily: "'Cambria Math', 'Times New Roman', serif, sans-serif",
+                      fontStyle: "normal",
+                      borderRadius: 6,
+                      border: "1px solid var(--fb-border)",
+                      backgroundColor: "var(--fb-bg-paper)",
+                      color: "var(--fb-text-primary)",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--fb-primary)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--fb-border)")}
+                  >
+                    {sym.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {editorTab === 0 ? (
               <textarea

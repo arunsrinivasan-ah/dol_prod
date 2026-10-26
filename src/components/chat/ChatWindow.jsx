@@ -192,6 +192,10 @@ export const formatMarkdownContent = (content) => {
     formatted += "*";
   }
 
+  // Wrap mathematical variables and Greek symbols in <var> for crisp academic typography
+  formatted = formatted.replace(/\bl(?=<sub>w[12]<\/sub>)/g, "<var>l</var>");
+  formatted = formatted.replace(/(?<!<var[^>]*>)(ϕ|φ|θ|Δ|α|β|γ|λ|μ|π|ρ|σ|Σ|Ω)(?!<\/var>)/g, "<var>$1</var>");
+
   return formatted.trim();
 };
 export const sanitizeMarkdown = (content, skipFormatting = false) => {
@@ -205,8 +209,8 @@ export const sanitizeMarkdown = (content, skipFormatting = false) => {
   });
 
   return DOMPurify.sanitize(html, {
-    ADD_TAGS: ["input"],
-    ADD_ATTR: ["type", "checked", "disabled"],
+    ADD_TAGS: ["input", "sub", "sup", "var"],
+    ADD_ATTR: ["type", "checked", "disabled", "style", "class"],
     ADD_DATA_URI_TAGS: ["img"],
     ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp|data):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
   });
