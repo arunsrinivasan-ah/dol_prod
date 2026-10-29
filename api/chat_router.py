@@ -542,18 +542,48 @@ async def chat1(
                 media_pdfs = media["pdfs"] if (isinstance(media, dict) and "pdfs" in media) else (getattr(node_response, "pdfs", None) or [])
                 media_topic_codes = media.get("topic_codes", []) if isinstance(media, dict) else (getattr(node_response, "topic_codes", None) or [])
 
+            extracted_topics = []
+            seen_t_keys = set()
+            for s in (sections or []):
+                tc = str(s.get("topic_code") or "").strip()
+                tn = str(s.get("topic_name") or "").strip()
+                if tc or tn:
+                    key = tc or tn
+                    if key not in seen_t_keys:
+                        seen_t_keys.add(key)
+                        extracted_topics.append({"code": tc, "name": tn})
+
+            for v in (media_videos or []):
+                tc = str(v.get("topic_code") or "").strip()
+                tn = str(v.get("topic_name") or "").strip()
+                if tc or tn:
+                    key = tc or tn
+                    if key not in seen_t_keys:
+                        seen_t_keys.add(key)
+                        extracted_topics.append({"code": tc, "name": tn})
+
+            if not extracted_topics and media_topic_codes:
+                for tc in media_topic_codes:
+                    if tc and str(tc) not in seen_t_keys:
+                        seen_t_keys.add(str(tc))
+                        extracted_topics.append({"code": str(tc), "name": f"Topic {tc}"})
+
             if not is_stream_out_of_scope and not is_resp_social and not suppress_extras:
                 media_payload = {
                     "type": "media",
                     "videos": media_videos[:5],
                     "images": media_images[:5],
                     "pdfs": media_pdfs[:5],
-                    "topic_codes": media_topic_codes
+                    "topic_codes": media_topic_codes,
+                    "topics": extracted_topics,
                 }
 
                 yield (
                     f"data: {json.dumps(media_payload)}\n\n"
                 )
+
+                for top in extracted_topics:
+                    yield f"data: {json.dumps({'type': 'source_topic', 'topic_code': top['code'], 'topic_name': top['name']})}\n\n"
 
             company_answer = None if (is_stream_out_of_scope or is_resp_social or suppress_extras) else media.get("company_answer")
 
@@ -637,6 +667,9 @@ async def chat1(
                         continue
 
                 seen_videos.add(video_id)
+                if isinstance(chunk, dict):
+                    chunk["source_type"] = "transcript_vector"
+                    chunk["topic_code"] = str(chunk.get("topic_code") or "")
                 unique_chunks.append(chunk)
                 if len(unique_chunks) >= 5:
                     break
@@ -654,6 +687,17 @@ async def chat1(
                 )
 
                         
+            # Attach rich media, transcripts, and topics to saved session message
+            if updated_messages and isinstance(updated_messages[-1], dict) and updated_messages[-1].get("role") == "assistant":
+                if unique_chunks:
+                    updated_messages[-1]["transcripts"] = unique_chunks
+                if extracted_topics:
+                    updated_messages[-1]["topics"] = extracted_topics
+                if media_topic_codes:
+                    updated_messages[-1]["topic_codes"] = media_topic_codes
+                if media_videos:
+                    updated_messages[-1]["videos"] = media_videos[:5]
+
             # -----------------------------
             # SAVE (Concurrent Redis + PostgreSQL)
             # -----------------------------

@@ -219,6 +219,13 @@ FORMATTING & STRUCTURE RULES:
       - Directly anchor the response on the specific question asked.
       - Title the first section directly with the specific concept or procedure (e.g., "### Safety Depth Contour in ECDIS" or "### Washwater Discharge pH Limits").
       - Answer the question immediately, thoroughly, and comprehensively using the specific details from the retrieved COURSE CONTEXT.
+  * SCENARIO 3: MARITIME CALCULATIONS, FORMULAS, WORKED PROBLEMS & TECHNICAL PLANNING:
+    → When the user asks for a calculation, formula, draft survey, stowage calculation, displacement method, or creating a plan given parameters (e.g., hatch dimensions, stowage factor, load density, broken stowage, engine slip, ullage, trim/stability):
+      - DO NOT begin with a generic "Overview of [Topic]" or basic descriptive theory.
+      - Directly state the governing mathematical formulas with clear variable definitions.
+      - Outline the exact step-by-step calculation procedure and physical constraints (e.g., net hold volume allowance for broken stowage vs. tank-top load density limit).
+      - If numerical inputs were provided by the user, compute and solve step-by-step.
+      - If no numerical values were provided, provide the step-by-step procedure followed by a clear, realistic WORKED NUMERICAL EXAMPLE demonstrating the formulas in action so the user receives the calculation immediately in the primary response.
 - REGULATORY MANDATES & UPCOMING AMENDMENTS:
   * When the user's question asks about regulations, rules, amendments, or compliance effective on a specific date or year (e.g., "regulation on gas meters effective jan 2026", "amendments to SEEMP/DCS for 2026"):
     → Focus the response directly on the regulatory requirements, compliance deadlines, MARPOL/IMO resolutions, and instrumentation/reporting standards from COURSE CONTEXT.
@@ -788,6 +795,21 @@ async def query_node(state, openai_service, suggestion_service, vector_store=Non
     if acronym_notes:
         effective_query_for_prompt += f"\n[Maritime Acronym Context: {'; '.join(acronym_notes)}]"
 
+    # Dynamic calculation intent detection
+    is_calc_query = bool(re.search(
+        r'\b(?:calculat(?:e|ion|ions|ing)|formula(?:s)?|draft\s+survey|stowage\s+factor|'
+        r'broken\s+stowage|load\s+density|cargo\s+plan(?:ning)?|ullage\s+calculation|'
+        r'engine\s+slip|sfoc|fwa|dwa|displacement\s+method|worked\s+example|numerical)\b',
+        effective_query_for_prompt,
+        re.IGNORECASE
+    ))
+    if is_calc_query:
+        effective_query_for_prompt += (
+            "\n[Query Intent: Maritime Calculation & Technical Planning. Directly provide governing mathematical "
+            "formulas, parameter definitions, constraint checks (volume vs load density), and a complete step-by-step "
+            "worked numerical example. Do not output a generic descriptive overview.]"
+        )
+
     prompt = QUERY_PROMPT.format(
         user_query=effective_query_for_prompt,
         chunks_content=chunks_text,
@@ -1246,7 +1268,10 @@ async def query_node(state, openai_service, suggestion_service, vector_store=Non
             elif len(query.split()) <= 4:
                 target_name = query.strip()
 
-        header_text = generate_subtopic_header(target_name, query)
+        if safe_get(state, "_is_calc_query", False) or (locals().get("is_calc_query", False)):
+            header_text = "**Related reference and calculation modules:**"
+        else:
+            header_text = generate_subtopic_header(target_name, query)
 
         formatted_items = []
         for clean_t, raw_c in distinct_course_chapters:

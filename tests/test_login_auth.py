@@ -118,3 +118,17 @@ def test_disable_external_auth_bypasses_remote_call(auth_client, monkeypatch):
                     assert data["email"] == "local@example.com"
                     assert data["user_id"] == "local-user-id"
                     mock_auth.assert_not_called()
+
+
+def test_production_ignores_disable_external_auth_flag(auth_client, monkeypatch):
+    """Even if disable_external_auth is True, production environment MUST call authenticateDolphin."""
+    client, pool = auth_client
+    monkeypatch.setattr("config.settings.app_env", "production")
+    monkeypatch.setattr("config.settings.disable_external_auth", True)
+
+    with patch("services.auth_service.AuthService.authenticateDolphin", side_effect=DolphinAuthConnectionError("Timeout")) as mock_auth:
+        resp = client.post("/login", json={"email": "prod@example.com", "password": "password123"})
+        # Must fail with 503 because it was forced to call external CMS and did NOT bypass!
+        assert resp.status_code == 503
+        mock_auth.assert_called_once()
+

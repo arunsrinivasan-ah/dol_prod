@@ -12,7 +12,7 @@ Classifies eligible user questions as either:
 Ensures follow-up questions evaluate scope using the resolved standalone query.
 """
 
-from typing import List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 import re
 
 from services.maritime_acronyms import (
@@ -24,6 +24,11 @@ from services.maritime_acronyms import (
 
 SCOPE_GENERAL = "GENERAL"
 SCOPE_SPECIFIC = "SPECIFIC"
+
+# ── Feature Flag ──
+# Set to False to completely disable question scope classification and subject filtering.
+# All questions will be treated as standard GENERAL queries with zero scope restrictions.
+ENABLE_QUESTION_SCOPE: bool = True
 
 # Patterns indicating an abbreviation expansion / meaning request (GENERAL)
 ABBREVIATION_PATTERNS = [
@@ -86,6 +91,16 @@ SPECIFIC_KEYWORDS_PATTERN = re.compile(
     r'scrubber\s+tower|holding\s+tank|settling\s+tank|caustic\s+soda|cyclone|separator\s+bowl|'
     r'bilge\s+alarm|oil\s+content\s+meter|ocm|15\s*ppm\s+bilge|'
     r'governor|actuator|actuators|filter\s+element|fuel\s+injector|intercooler|turbocharger|'
+    # Specialized machinery sub-types, propulsion & engine architectures (SPECIFIC)
+    r'camshaft[\s\-]*less|camless|cam[\s\-]*shaft|camshaft|camshafts|'
+    r'common[\s\-]*rail|electronic(?:ally)?[\s\-]*controlled|intelligent[\s\-]*engine|'
+    r'dual[\s\-]*fuel|tri[\s\-]*fuel|two[\s\-]*stroke|four[\s\-]*stroke|2[\s\-]*stroke|4[\s\-]*stroke|'
+    r'crosshead|trunk[\s\-]*piston|waste[\s\-]*heat[\s\-]*recovery|'
+    r'variable[\s\-]*pitch|controllable[\s\-]*pitch|cpp|fpp|'
+    r'shaft[\s\-]*generator|bow[\s\-]*thruster|stern[\s\-]*thruster|azipod|'
+    r'exhaust[\s\-]*valve|cylinder[\s\-]*liner|piston[\s\-]*ring|piston[\s\-]*crown|'
+    r'crankcase|crankshaft|connecting[\s\-]*rod|bedplate|thrust[\s\-]*bearing|main[\s\-]*bearing|'
+    r'stuffing[\s\-]*box|scavenge[\s\-]*air|'
     # Regulatory timelines, specific effective dates & entry-into-force triggers
     r'effective\s+(?:date|dates|from|on|in|as\s+of)|'
     r'effective\s+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)|'
@@ -129,9 +144,12 @@ def classify_question_scope(
 ) -> str:
     """
     Classify a question as GENERAL or SPECIFIC.
-    Uses the resolved standalone_query when available (crucial for follow-up questions
-    where pronouns like 'it' or 'that' have been resolved).
+    When ENABLE_QUESTION_SCOPE is False, question scope functionality is disabled
+    and all queries default to SCOPE_GENERAL without filtering media or restricting sibling search.
     """
+    if not ENABLE_QUESTION_SCOPE:
+        return SCOPE_GENERAL
+
     text_to_eval = (standalone_query or query or "").strip()
     if not text_to_eval:
         return SCOPE_GENERAL
@@ -200,12 +218,9 @@ def classify_question_scope(
 def extract_specific_subject_terms(query: str) -> Set[str]:
     """
     Extract distinctive specific subject terms from a query.
-    Strips English stopwords, generic maritime stopwords, administrative/regulatory carrier words,
-    timeline/date words, and overarching acronyms.
-    Used during media filtering for SPECIFIC questions to verify candidates match
-    the actual narrow subject asked about.
+    When ENABLE_QUESTION_SCOPE is False, returns an empty set so no media items are restricted.
     """
-    if not query:
+    if not ENABLE_QUESTION_SCOPE or not query:
         return set()
 
     detected_acrs = {a.lower() for a in find_acronyms_in_query(query)}
@@ -238,6 +253,21 @@ def extract_specific_subject_terms(query: str) -> Set[str]:
     if not filtered_terms:
         fallback_stop = COMMON_ENGLISH_STOPWORDS | structural_words | detected_acrs
         filtered_terms = {t for t in raw_tokens if t not in fallback_stop} | two_letter_terms
+
+    # Broad machinery and parent carrier words that should not act as specific filters
+    # when more distinctive sub-type, fault, or component qualifiers exist
+    parent_machinery_carrier_words = {
+        "engine", "engines", "machinery", "motor", "motors", "main", "auxiliary"
+    }
+    distinctive_terms = {t for t in filtered_terms if t not in parent_machinery_carrier_words and t != "less"}
+    if distinctive_terms:
+        filtered_terms = distinctive_terms
+
+    # Special normalization for compound sub-types like camshaft-less / camshaftless
+    q_lower = query.lower()
+    if re.search(r'\bcamshaft[\s\-]*less\b|\bcamless\b', q_lower):
+        filtered_terms.add("camshaft")
+        filtered_terms.add("camshaftless")
 
     # Add stemmed variations for matching
     expanded_terms = set(filtered_terms)

@@ -224,11 +224,15 @@ class VectorStoreAdapter:
     async def search_with_embeddings(
             self,
             query: str,
-            k: int = DEFAULT_TOP_K
+            k: int = DEFAULT_TOP_K,
+            original_query: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Search using the embedder to generate vectors before querying FAISS,
         and blend with BM25 exact keyword search using Reciprocal Rank Fusion (RRF).
+        If original_query is provided (e.g. before acronym expansion / LLM expansion),
+        BM25 performs dual search on both the original and expanded queries to prevent
+        rare keyword dilution.
         """
         if not query or not query.strip():
             logger.warning("Empty query provided to VectorStoreAdapter")
@@ -259,12 +263,36 @@ class VectorStoreAdapter:
                 maybe_result = self.store.search_with_embeddings(cleaned_query, k=k)
                 faiss_results = await maybe_result if asyncio.iscoroutine(maybe_result) else maybe_result
 
-            # 2. BM25 Sparse Keyword Search
+            # 2. BM25 Sparse Keyword Search (Dual search if original_query provided)
             bm25_results: List[Dict[str, Any]] = []
             bm25 = self._get_bm25()
             if bm25 and hasattr(bm25, "search"):
                 try:
                     bm25_results = bm25.search(cleaned_query, k=k)
+                    # If original query provided and differs from expanded, execute dual search
+                    # to prevent expansion words from diluting exact acronym/keyword matches
+                    if original_query and original_query.strip().lower() != cleaned_query.lower():
+                        raw_query_clean = original_query.strip()
+                        raw_bm25_results = bm25.search(raw_query_clean, k=k)
+                        if raw_bm25_results:
+                            # Merge: keep best score per document
+                            merged_bm25 = {
+                                str(r.get("content_id") or r.get("topic_name") or idx): r
+                                for idx, r in enumerate(bm25_results)
+                            }
+                            for r_idx, r_doc in enumerate(raw_bm25_results):
+                                key = str(r_doc.get("content_id") or r_doc.get("topic_name") or f"raw_{r_idx}")
+                                if key in merged_bm25:
+                                    if float(r_doc.get("_bm25_score") or 0) > float(merged_bm25[key].get("_bm25_score") or 0):
+                                        merged_bm25[key] = r_doc
+                                else:
+                                    merged_bm25[key] = r_doc
+                            # Re-sort merged BM25 candidates by score descending
+                            bm25_results = sorted(
+                                merged_bm25.values(),
+                                key=lambda d: float(d.get("_bm25_score") or 0),
+                                reverse=True
+                            )[:k]
                 except Exception as bm_err:
                     logger.warning(f"BM25 search failed: {bm_err}")
 
@@ -272,7 +300,7 @@ class VectorStoreAdapter:
                 logger.info(f"✅ FAISS-only search returned {len(faiss_results)} results")
                 return faiss_results or []
 
-            # 3. Reciprocal Rank Fusion (RRF)
+            # 3. Reciprocal Rank Fusion (RRF) with Score-Aware Confidence Multipliers
             rrf_k = 60
             doc_scores: Dict[str, float] = defaultdict(float)
             doc_map: Dict[str, Dict[str, Any]] = {}
@@ -282,12 +310,28 @@ class VectorStoreAdapter:
 
             for rank, doc in enumerate(faiss_results):
                 key = _doc_key(doc, rank)
-                doc_scores[key] += 1.0 / (rrf_k + rank + 1)
+                # Score-aware confidence multiplier for FAISS:
+                # High confidence (L2 distance < 0.8) gets +15% boost, < 1.1 gets +5%
+                faiss_dist = float(doc.get("_score") if doc.get("_score") is not None else (doc.get("score") if doc.get("score") is not None else 1.0))
+                dist_mult = 1.15 if faiss_dist < 0.8 else (1.05 if faiss_dist < 1.1 else 1.0)
+                doc_scores[key] += (1.0 / (rrf_k + rank + 1)) * dist_mult
                 doc_map[key] = doc
 
             for rank, doc in enumerate(bm25_results):
                 key = _doc_key(doc, rank + 1000)
-                doc_scores[key] += 1.0 / (rrf_k + rank + 1)
+                bm25_score = float(doc.get("_bm25_score") or 0)
+                # Skip near-zero BM25 hits — they are noise and should not boost fused scores
+                # Threshold lowered 0.1 → 0.05: rare maritime terms (e.g. "Manila", "STCW 2010")
+                # can score 0.05–0.09 and were previously dropped, losing correct lexical signal.
+                if bm25_score < 0.05:
+                    if key not in doc_map:
+                        doc_map[key] = doc
+                    continue
+
+                # Score-aware confidence multiplier for BM25:
+                # Strong keyword matches (score >= 5.0) get +15% boost, >= 2.0 gets +5%
+                bm25_mult = 1.15 if bm25_score >= 5.0 else (1.05 if bm25_score >= 2.0 else 1.0)
+                doc_scores[key] += (1.0 / (rrf_k + rank + 1)) * bm25_mult
                 if key not in doc_map:
                     doc_map[key] = doc
 
@@ -725,13 +769,21 @@ class ChatService:
                 extract(["thumbnail", "Thumbnail"], data)
             ).strip()
 
+            topic_code = str(extract(["topic_code", "TopicCode"], data)).strip()
+            topic_name = str(extract(["topic_name", "TopicName"], data)).strip()
+            source_type = str(extract(["source_type"], data)).strip() or "curriculum"
+            clean_video_id = video_id or (url.split("/")[-1].split("?")[0].replace(".mp4", "") if url else "")
+
             normalized.append(
                 {
                     "title": title or "Course video",
                     "url": url,
                     "videourl": url,
-                    "video_id": video_id,
+                    "video_id": clean_video_id,
                     "thumbnail": thumbnail,
+                    "topic_code": topic_code,
+                    "topic_name": topic_name,
+                    "source_type": source_type,
                 }
             )
 
@@ -739,15 +791,6 @@ class ChatService:
 
     def _normalize_chunk(self, raw: Dict[str, Any]) -> Dict[str, Any]:
         """Ensure retrieval chunks have consistent fields for downstream nodes."""
-        logger.error(
-            "RAW CHUNK KEYS = {}",
-            list(raw.keys())
-        )
-
-        logger.error(
-            "RAW TOPIC CODE = {}",
-            raw.get("topic_code")
-        )
 
         topic_name = raw.get("topic_name") or raw.get("title") or raw.get("topic") or ""
         topic_content = raw.get("topic_content") or raw.get("content") or raw.get("text") or ""
@@ -756,15 +799,50 @@ class ChatService:
             if topic_name or topic_content
             else ""
         )
-        # topic_code = str(raw.get("topic_code") or "")
         topic_code = str(raw.get("topic_code") or "")
+        content_id = raw.get("content_id") or raw.get("id")
 
-        images = self.image_service.get_images_by_topic_code(topic_code)
+        # Scores preserved for debug tracing
+        faiss_score = raw.get("_score")
+        bm25_score = raw.get("_bm25_score")
+        rrf_score = raw.get("_rrf_score")
+        rank = raw.get("_rank")
+
+        # ── Image relevance gate ──────────────────────────────────────────────
+        # Only fetch images from ImageService for chunks that are strongly confirmed:
+        #   - BM25 scored the chunk (keyword match), OR
+        #   - FAISS distance is tight (< 1.0), OR
+        #   - chunk has a topic-name match flag
+        chunk_is_strong = (
+            (bm25_score is not None and bm25_score > 0)
+            or (faiss_score is not None and float(faiss_score) < 1.0)
+            or raw.get("_has_topic_match", False)
+        )
+        images = []
+        if topic_code and chunk_is_strong:
+            images = self.image_service.get_images_by_topic_code(topic_code)
         if not images:
             images = self._coerce_media(raw.get("topic_image") or raw.get("images"))
 
+        # ── Debug log ─────────────────────────────────────────────────────────
+        logger.info(
+            "[CHUNK] content_id={} | topic_code={} | topic_name='{}' | "
+            "faiss_score={} | bm25_score={} | rrf_score={} | rank={} | "
+            "images={} | videos={} | pdfs={}",
+            content_id,
+            topic_code or "(none)",
+            topic_name[:60] if topic_name else "",
+            f"{float(faiss_score):.4f}" if faiss_score is not None else "N/A",
+            f"{float(bm25_score):.4f}" if bm25_score is not None else "N/A",
+            f"{float(rrf_score):.6f}" if rrf_score is not None else "N/A",
+            rank,
+            len(images),
+            len(self._coerce_media(raw.get("topic_video") or raw.get("videos"))),
+            len(self._coerce_media(raw.get("topic_pdf") or raw.get("pdfs"))),
+        )
+
         return {
-            "content_id": raw.get("content_id") or raw.get("id"),
+            "content_id": content_id,
             "course_code": str(raw.get("course_code") or "").strip(),
             "topic_name": topic_name,
             "topic_code": topic_code,
@@ -774,6 +852,11 @@ class ChatService:
             "images": images,
             "pdfs": self._coerce_media(raw.get("topic_pdf") or raw.get("pdfs")),
             "keywords": raw.get("keywords") or raw.get("tags") or [],
+            # Scores retained for downstream debug / re-ranking
+            "_score": faiss_score,
+            "_bm25_score": bm25_score,
+            "_rrf_score": rrf_score,
+            "_rank": rank,
         }
 
     def _build_video_suggestions(
@@ -847,14 +930,20 @@ class ChatService:
                 
                 # Use original URL for display
                 display_url = raw_url if raw_url else normalized_url
+                t_code = str(chunk.get("topic_code") or "")
+                t_name = str(chunk.get("topic_name") or "")
+                vid_id = video_id_display or (display_url.split("/")[-1].split("?")[0].replace(".mp4", "") if display_url else "")
 
                 suggestions.append(
                     {
-                        "title": title if title else "Course video",
+                        "title": title if title else (t_name or "Course video"),
                         "url": display_url,
                         "videourl": display_url,
-                        "video_id": video_id_display,
+                        "video_id": vid_id,
                         "thumbnail": thumbnail,
+                        "topic_code": t_code,
+                        "topic_name": t_name,
+                        "source_type": "curriculum_chunk",
                     }
                 )
 
@@ -1212,7 +1301,17 @@ class ChatService:
             (query or "").strip(),
             flags=re.IGNORECASE,
         ).rstrip("?").strip()
-        if len(clean_q) >= 4 and f"%{clean_q}%" not in exact_patterns:
+        # FIX-1: Guard against short/generic queries like "main engine" or "auxiliary boiler"
+        # adding a broad wildcard that matches hundreds of unrelated video titles.
+        # Only add the raw cleaned query as a pattern when it contains > 3 specific content
+        # words (after removing stopwords).  For short queries the chunk topic_name patterns
+        # added in the block below are precise enough on their own.
+        from services.maritime_acronyms import COMMON_ENGLISH_STOPWORDS as _stop_ev
+        _cq_content_words = [
+            w for w in re.findall(r'\b[a-zA-Z]{4,}\b', clean_q.lower())
+            if w not in _stop_ev
+        ]
+        if len(clean_q) >= 4 and f"%{clean_q}%" not in exact_patterns and len(_cq_content_words) > 3:
             exact_patterns.append(f"%{clean_q}%")
 
         # Include cleaned topic names from top retrieved chunks
@@ -1249,6 +1348,7 @@ class ChatService:
         query: str = "",
         max_images: int = 5,
         db_timings: Optional[Dict[str, float]] = None,
+        anchor_topic_codes: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """Look up related course_content rows in DB for this topic that have images when retrieved chunks lack images."""
         if not chunks and not query:
@@ -1302,6 +1402,11 @@ class ChatService:
                         topic_codes[:5]
                     )
                 else:
+                    # FIX-4: Add topic_code anchor priority as the FIRST ORDER BY key.
+                    # anchor_topic_codes are the exact topic_codes of the top retrieved chunks,
+                    # so images belonging to those topics always come first in the result set
+                    # before any ILIKE wildcard matches.  WHERE clause is completely unchanged.
+                    _img_anchor = list(anchor_topic_codes or topic_codes[:3])
                     rows = await conn.fetch(
                         """
                         SELECT content_id, topic_name, topic_code, topic_image
@@ -1312,13 +1417,15 @@ class ChatService:
                         )
                         AND topic_image IS NOT NULL
                         AND jsonb_array_length(topic_image) > 0
-                        ORDER BY 
+                        ORDER BY
+                            CASE WHEN cardinality($3::text[]) > 0 AND topic_code = ANY($3::text[]) THEN 0 ELSE 1 END,
                             CASE WHEN cardinality($1::text[]) > 0 AND topic_name ILIKE ANY($1::text[]) THEN 0 ELSE 1 END,
                             content_id ASC
                         LIMIT 15
                         """,
                         search_patterns,
-                        topic_codes[:5]
+                        topic_codes[:5],
+                        _img_anchor,
                     )
             if db_timings is not None:
                 db_timings["db_query"] = db_timings.get("db_query", 0.0) + (time.perf_counter() - t_db0)
@@ -1420,7 +1527,12 @@ class ChatService:
                 c_topic = str(chk.get("topic_name") or chk.get("title") or "").lower().strip()
                 c_clean = re.sub(r'^\s*[\d\.\-\s]+', '', c_topic).strip()
                 if c_clean and len(c_clean) >= 4:
-                    if c_clean in lower_title or (len(lower_title) >= 4 and lower_title in c_clean):
+                    # FIX-7: Only boost when the retrieved topic name is a substring of the
+                    # video title (c_clean IN lower_title).  The old reverse direction
+                    # (lower_title IN c_clean) was too broad — any short video title like
+                    # 'Main Engine' could be found inside a long topic name and get +150,
+                    # boosting completely unrelated videos.  Exact equality is still allowed.
+                    if c_clean in lower_title or lower_title == c_clean:
                         matches_retrieved_topic = True
                         match_count += 3
                         score += 150.0
@@ -1479,17 +1591,27 @@ class ChatService:
             if is_intro:
                 score -= 20.0
 
+            clean_vid_id = video_id or (raw_url.split("/")[-1].split("?")[0].replace(".mp4", "") if raw_url else "")
+            vid_topic_code = str((video.get("topic_code") if isinstance(video, dict) else "") or "")
+            vid_source_type = str((video.get("source_type") if isinstance(video, dict) else "") or "curriculum")
+
             candidates.append((score, match_count, not is_intro, {
                 "title": title,
                 "url": raw_url,
                 "videourl": raw_url,
-                "video_id": video_id,
+                "video_id": clean_vid_id,
                 "thumbnail": thumbnail,
+                "topic_name": topic_name or (video.get("topic_name") if isinstance(video, dict) else ""),
+                "topic_code": vid_topic_code,
+                "source_type": vid_source_type,
             }))
 
         for chunk_idx, chunk in enumerate(chunks or []):
             t_name = str(chunk.get("topic_name") or chunk.get("title") or "")
+            t_code = str(chunk.get("topic_code") or "")
             for v in (chunk.get("videos", []) or chunk.get("topic_video", [])):
+                if isinstance(v, dict) and not v.get("topic_code"):
+                    v["topic_code"] = t_code
                 process_video(v, chunk_rank=chunk_idx, default_title=t_name or "Course video", topic_name=t_name)
 
         for v in (video_suggestions or []):
@@ -1497,6 +1619,60 @@ class ChatService:
 
         candidates.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
         return [c[3] for c in candidates[:max_videos]]
+
+    async def _find_chunk_pinned_videos(
+        self,
+        chunks: List[Dict[str, Any]],
+        max_videos: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """
+        FIX-2: Chunk-pinned video search.
+        Query the transcribe table directly by the exact topic_codes of the top retrieved
+        chunks BEFORE any wildcard ILIKE fallback runs.  This guarantees that videos shown
+        are genuinely from the same lesson/topic the retrieval pipeline judged most relevant,
+        not just any video whose title happens to contain a broad term like 'main engine'.
+        Returns [] gracefully if topic_code is absent or transcribe has no matching rows.
+        """
+        if not chunks:
+            return []
+        try:
+            topic_codes = [c.get("topic_code") for c in chunks[:5] if c.get("topic_code")]
+            if not topic_codes:
+                return []
+            pool = await get_pool()
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT video_id, video_title, video_link, video_thumbnail, topic_code
+                    FROM transcribe
+                    WHERE topic_code = ANY($1::text[])
+                    ORDER BY video_title ASC
+                    LIMIT $2
+                    """,
+                    topic_codes,
+                    max_videos,
+                )
+            result: List[Dict[str, Any]] = []
+            seen_urls: set = set()
+            for r in rows:
+                v_link = r.get("video_link") or ""
+                if v_link and v_link not in seen_urls and (
+                    v_link.startswith("http://") or v_link.startswith("https://") or v_link.endswith(".mp4")
+                ):
+                    seen_urls.add(v_link)
+                    result.append({
+                        "title": r.get("video_title") or "Course video",
+                        "url": v_link,
+                        "videourl": v_link,
+                        "video_id": str(r.get("video_id") or ""),
+                        "thumbnail": r.get("video_thumbnail") or "",
+                        "topic_code": str(r.get("topic_code") or (topic_codes[0] if topic_codes else "")),
+                        "source_type": "curriculum_pinned",
+                    })
+            return result
+        except Exception as e:
+            logger.debug(f"_find_chunk_pinned_videos failed (non-critical): {e}")
+            return []
 
     async def _find_sibling_videos(
         self,
@@ -1534,7 +1710,7 @@ class ChatService:
                     try:
                         transcribe_rows = await conn.fetch(
                             """
-                            SELECT video_id, video_title, video_link, video_thumbnail
+                            SELECT video_id, video_title, video_link, video_thumbnail, topic_code
                             FROM transcribe
                             WHERE video_title ILIKE ANY($1)
                             ORDER BY 
@@ -1560,6 +1736,8 @@ class ChatService:
                                         "videourl": v_link,
                                         "video_id": str(tr.get("video_id") or ""),
                                         "thumbnail": tr.get("video_thumbnail") or "",
+                                        "topic_code": str(tr.get("topic_code") or ""),
+                                        "source_type": "sibling_direct",
                                     })
                     except Exception as tr_err:
                         logger.debug(f"Direct transcribe video search skipped/failed: {tr_err}")
@@ -1615,10 +1793,21 @@ class ChatService:
                         )
                     for r in rows:
                         c_dict = dict(r)
+                        t_name = c_dict.get("topic_name") or ""
+                        t_code = c_dict.get("topic_code") or ""
+                        v_list = self._coerce_media(c_dict.get("topic_video"))
+                        for v in v_list:
+                            if isinstance(v, dict):
+                                if not v.get("topic_name"):
+                                    v["topic_name"] = t_name
+                                if not v.get("topic_code"):
+                                    v["topic_code"] = t_code
+                                if not v.get("source_type"):
+                                    v["source_type"] = "curriculum_sibling"
                         sibling_chunks.append({
-                            "topic_name": c_dict.get("topic_name"),
-                            "topic_code": c_dict.get("topic_code"),
-                            "videos": self._coerce_media(c_dict.get("topic_video")),
+                            "topic_name": t_name,
+                            "topic_code": t_code,
+                            "videos": v_list,
                         })
 
             if db_timings is not None:
@@ -1900,6 +2089,11 @@ class ChatService:
                     )
                     AND topic_pdf IS NOT NULL
                     AND jsonb_array_length(topic_pdf) > 0
+                    -- FIX-5: ORDER BY topic_code priority so PDFs from the actually-retrieved
+                    -- topic come first before unrelated sibling topics fill the LIMIT 20 cap.
+                    ORDER BY
+                        CASE WHEN cardinality($2::text[]) > 0 AND topic_code = ANY($2::text[]) THEN 0 ELSE 1 END,
+                        content_id ASC
                     LIMIT 20
                     """,
                     search_patterns,
@@ -1986,8 +2180,16 @@ class ChatService:
             if question_scope == SCOPE_GENERAL and len(images) < 4 and retrieval_chunks:
                 t_sib0 = time.perf_counter()
                 needed = 4 - len(images)
+                # FIX-6: Pass the exact topic_codes of the retrieved chunks as anchor so
+                # the SQL ORDER BY in _find_sibling_images prioritises images from the
+                # actually-retrieved topic before falling back to broader ILIKE matches.
+                _img_anchor_codes = [
+                    c.get("topic_code") for c in retrieval_chunks[:3] if c.get("topic_code")
+                ]
                 sibling_images = await self._find_sibling_images(
-                    retrieval_chunks, query=current_query, max_images=needed, db_timings=media_sub_timings
+                    retrieval_chunks, query=current_query, max_images=needed,
+                    db_timings=media_sub_timings,
+                    anchor_topic_codes=_img_anchor_codes,
                 )
                 images.extend(sibling_images)
                 media_sub_timings["sibling_images"] = time.perf_counter() - t_sib0
@@ -2044,10 +2246,31 @@ class ChatService:
             return pdf_service.deduplicate_titles(pdfs)[:3]
 
         async def _enrich_videos() -> List[Dict[str, Any]]:
+            # FIX-2: Run chunk-pinned video search FIRST.
+            # Queries the transcribe table directly by the exact topic_codes of the retrieved
+            # chunks so videos are tied to the actual lesson content, not just any video whose
+            # title contains a broad keyword like 'main engine'.  Falls back gracefully to []
+            # if topic_code is absent in transcribe, keeping existing behavior intact.
+            t_pin0 = time.perf_counter()
+            pinned_videos = await self._find_chunk_pinned_videos(retrieval_chunks, max_videos=5)
+            media_sub_timings["sibling_videos"] = time.perf_counter() - t_pin0
+
+            # Merge pinned videos with the chunk-embedded video_suggestions.
+            # Pinned come first so _filter_and_rank_videos sees them with highest chunk_rank.
+            seen_pin_keys: set = {v.get("url") or v.get("videourl") for v in pinned_videos}
+            all_candidate_vids: List[Dict[str, Any]] = list(pinned_videos)
+            for vs in (video_suggestions or []):
+                vk = vs.get("url") or vs.get("videourl")
+                if vk and vk not in seen_pin_keys:
+                    seen_pin_keys.add(vk)
+                    all_candidate_vids.append(vs)
+
             videos = self._filter_and_rank_videos(
-                retrieval_chunks, video_suggestions, query=current_query, max_videos=5, question_scope=question_scope
+                retrieval_chunks, all_candidate_vids, query=current_query,
+                max_videos=5, question_scope=question_scope
             )
-            # Sibling video search ONLY for GENERAL questions if more videos are needed
+
+            # Sibling video search ONLY for GENERAL questions if still short after pinned search
             if question_scope == SCOPE_GENERAL and len(videos) < 5 and retrieval_chunks:
                 t_sib0 = time.perf_counter()
                 needed = 5 - len(videos)
@@ -2062,9 +2285,12 @@ class ChatService:
                         seen_vid_keys.add(v_key)
                         combined.append(svid)
                 videos = self._filter_and_rank_videos(
-                    retrieval_chunks, combined, query=current_query, max_videos=5, question_scope=question_scope
+                    retrieval_chunks, combined, query=current_query,
+                    max_videos=5, question_scope=question_scope
                 )
-                media_sub_timings["sibling_videos"] = time.perf_counter() - t_sib0
+                media_sub_timings["sibling_videos"] = (
+                    media_sub_timings.get("sibling_videos", 0.0) + (time.perf_counter() - t_sib0)
+                )
             return videos
 
         all_images, all_pdfs, final_videos = await asyncio.gather(
@@ -2203,14 +2429,24 @@ class ChatService:
                 # Zero-hallucination relevance filter:
                 score = merged.get("_score")
                 has_bm25 = merged.get("_bm25_score") is not None and merged.get("_bm25_score", 0) > 0
+                bm25_val = float(merged.get("_bm25_score") or 0)
                 has_topic_match = merged.get("_has_topic_match", False)
 
                 if score is not None:
                     try:
-                        # If no exact keyword matched and distance is very high (>1.45), drop noise
-                        if not has_bm25 and not has_topic_match and float(score) > 1.45:
+                        dist = float(score)
+                        # Tier-1: FAISS-only (no BM25, no topic match) — tight threshold
+                        if not has_bm25 and not has_topic_match and dist > 1.2:
                             logger.info(
-                                f"Dropping low-relevance chunk: topic='{merged.get('topic_name')}', score={score}"
+                                f"Dropping low-relevance chunk (FAISS-only, dist={dist:.4f}): "
+                                f"topic='{merged.get('topic_name')}'"
+                            )
+                            continue
+                        # Tier-2: Weak BM25 + mediocre FAISS — moderate threshold
+                        if has_bm25 and bm25_val < 0.5 and dist > 1.35:
+                            logger.info(
+                                f"Dropping weak-signal chunk (bm25={bm25_val:.3f}, dist={dist:.4f}): "
+                                f"topic='{merged.get('topic_name')}'"
                             )
                             continue
                     except (TypeError, ValueError):

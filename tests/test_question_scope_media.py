@@ -85,6 +85,12 @@ def test_specific_component_fault_procedure_queries():
         "Turbidity limit for washwater discharge in port",
         "Action to take if steering gear fails during navigation",
         "What causes high vibration in the turbocharger?",
+        "Camshaft less main engines",
+        "Camshaft-less main engines",
+        "camshaftless main engines",
+        "What is a camshaft less engine?",
+        "Dual fuel 2-stroke engines",
+        "Common rail fuel injection",
     ]
     for q in queries:
         assert classify_question_scope(q) == SCOPE_SPECIFIC, f"Expected SPECIFIC for: {q}"
@@ -127,6 +133,13 @@ def test_specific_terms_extraction():
     assert "remove" in terms_sulphur
     assert "sulphur" in terms_sulphur or "sulfur" in terms_sulphur
 
+    # Specialized machinery subtype test:
+    # Camshaft-less main engines must keep 'camshaft' / 'camshaftless' and prune parent carrier 'main' and 'engines'
+    terms_camshaft = extract_specific_subject_terms("Camshaft less main engines")
+    assert "camshaft" in terms_camshaft
+    assert "main" not in terms_camshaft
+    assert "engines" not in terms_camshaft
+
 
 # ==============================================================================
 # 2. GENERAL VS SPECIFIC SIBLING MEDIA BEHAVIOR TESTS
@@ -154,11 +167,13 @@ def test_general_question_invokes_sibling_searches():
         with patch.object(service, "_find_sibling_images", new_callable=AsyncMock) as mock_sib_img, \
              patch.object(service, "_find_sibling_pdfs", new_callable=AsyncMock) as mock_sib_pdf, \
              patch.object(service, "_find_sibling_videos", new_callable=AsyncMock) as mock_sib_vid, \
+             patch.object(service, "_find_chunk_pinned_videos", new_callable=AsyncMock) as mock_pin_vid, \
              patch.object(service.image_service, "get_local_cached_url", return_value="https://example.com/cached.jpg"):
 
             mock_sib_img.return_value = [sibling_image]
             mock_sib_pdf.return_value = [sibling_pdf]
             mock_sib_vid.return_value = [sibling_video]
+            mock_pin_vid.return_value = []
 
             images, pdfs, videos, _, _ = await service._run_media_enrichment_task(
                 retrieval_chunks=mock_chunks,
@@ -198,7 +213,10 @@ def test_specific_question_excludes_sibling_searches():
         with patch.object(service, "_find_sibling_images", new_callable=AsyncMock) as mock_sib_img, \
              patch.object(service, "_find_sibling_pdfs", new_callable=AsyncMock) as mock_sib_pdf, \
              patch.object(service, "_find_sibling_videos", new_callable=AsyncMock) as mock_sib_vid, \
+             patch.object(service, "_find_chunk_pinned_videos", new_callable=AsyncMock) as mock_pin_vid, \
              patch.object(service.image_service, "get_local_cached_url", return_value="https://example.com/cached.jpg"):
+
+            mock_pin_vid.return_value = []
 
             images, pdfs, videos, _, _ = await service._run_media_enrichment_task(
                 retrieval_chunks=mock_chunks,
@@ -251,7 +269,10 @@ def test_specific_question_filters_out_unrelated_media():
         with patch.object(service, "_find_sibling_images", new_callable=AsyncMock) as mock_sib_img, \
              patch.object(service, "_find_sibling_pdfs", new_callable=AsyncMock) as mock_sib_pdf, \
              patch.object(service, "_find_sibling_videos", new_callable=AsyncMock) as mock_sib_vid, \
+             patch.object(service, "_find_chunk_pinned_videos", new_callable=AsyncMock) as mock_pin_vid, \
              patch.object(service.image_service, "get_local_cached_url", return_value="https://example.com/cached.jpg"):
+
+            mock_pin_vid.return_value = []
 
             images, pdfs, videos, _, _ = await service._run_media_enrichment_task(
                 retrieval_chunks=mock_chunks,
@@ -448,7 +469,10 @@ def test_gas_meters_unrelated_media_completely_filtered():
         with patch.object(service, "_find_sibling_images", new_callable=AsyncMock) as mock_sib_img, \
              patch.object(service, "_find_sibling_pdfs", new_callable=AsyncMock) as mock_sib_pdf, \
              patch.object(service, "_find_sibling_videos", new_callable=AsyncMock) as mock_sib_vid, \
+             patch.object(service, "_find_chunk_pinned_videos", new_callable=AsyncMock) as mock_pin_vid, \
              patch.object(service.image_service, "get_local_cached_url", return_value="https://example.com/cached.jpg"):
+
+            mock_pin_vid.return_value = []
 
             images, pdfs, videos, _, _ = await service._run_media_enrichment_task(
                 retrieval_chunks=mock_chunks,
