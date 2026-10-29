@@ -19,6 +19,7 @@ import {
   fetchTopicDetails,
 } from "../../api/fetchApi";
 import ChatMessage, { markdownContainerSx } from "./ChatMessage";
+import MediaInspectorDrawer from "./MediaInspectorDrawer";
 import { resolveImageUrl } from "../../api/config";
 import { useThemeMode } from "../../context/ThemeModeContext";
 import { Message } from "../../assets/svgIcons/message";
@@ -274,6 +275,11 @@ const normalizeVideo = (v) => ({
   title: v.title || v.Title || "",
   url: v.url || v.Url || v.videourl || "",
   thumbnail: v.thumbnail || v.Thumbnail || "",
+  video_id: String(v.video_id || v.Id || v.id || (v.url ? v.url.split("/").pop().split("?")[0].replace(/\.mp4$/i, "") : "")),
+  topic_code: String(v.topic_code || ""),
+  topic_name: String(v.topic_name || ""),
+  source_type: String(v.source_type || "curriculum"),
+  content: String(v.content || ""),
 });
 
 const normalizeImage = (img) => {
@@ -367,6 +373,19 @@ const ChatWindow = ({
     selectedTopicCode: null,
     detailTopic: null,
   });
+
+  // ── Testing: Media & Topic Inspector Drawer ──
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspectorData, setInspectorData] = useState(null);
+
+  const handleOpenInspector = useCallback((data) => {
+    setInspectorData(data);
+    setInspectorOpen(true);
+  }, []);
+
+  const handleCloseInspector = useCallback(() => {
+    setInspectorOpen(false);
+  }, []);
 
   // Close the sources panel when a new chat is started
   useEffect(() => {
@@ -662,14 +681,24 @@ const ChatWindow = ({
             },
 
             onMedia: (rawMedia) => {
+              const normVideos = (rawMedia.videos || []).map(normalizeVideo);
               accRef.current.media = {
-                videos: (rawMedia.videos || []).map(normalizeVideo),
+                videos: normVideos,
                 images: (rawMedia.images || []).map(normalizeImage),
                 pdfs: (rawMedia.pdfs || []).map(normalizePdf),
               };
+              if (rawMedia.topics && Array.isArray(rawMedia.topics)) {
+                for (const t of rawMedia.topics) {
+                  const tObj = typeof t === "object" ? t : { code: String(t), name: String(t) };
+                  if (!accRef.current.topics.some((x) => (typeof x === "object" ? x.code === tObj.code : x === tObj.code))) {
+                    accRef.current.topics.push(tObj);
+                  }
+                }
+              }
               setLiveMessage((prev) => ({
                 ...prev,
                 media: accRef.current.media,
+                topics: [...accRef.current.topics],
               }));
             },
 
@@ -677,11 +706,18 @@ const ChatWindow = ({
               const { code, name } =
                 typeof topicData === "string"
                   ? { code: topicData, name: topicData }
-                  : topicData;
+                  : (topicData || {});
 
-              if (code && code.trim() && name && name.trim()) {
-                if (!accRef.current.topics.includes(code)) {
-                  accRef.current.topics.push(code);
+              if ((code && String(code).trim()) || (name && String(name).trim())) {
+                const topicObj = {
+                  code: String(code || "").trim(),
+                  name: String(name || "").trim(),
+                };
+                const alreadyExists = accRef.current.topics.some(
+                  (t) => (typeof t === "object" ? t.code === topicObj.code : t === topicObj.code)
+                );
+                if (!alreadyExists) {
+                  accRef.current.topics.push(topicObj);
                 }
                 setLiveMessage((prev) => ({
                   ...prev,
@@ -1116,6 +1152,7 @@ const ChatWindow = ({
                   onTopicClick={(topicCode) =>
                     handleTopicClick(topicCode, msg.topics)
                   }
+                  onOpenInspector={handleOpenInspector}
                   isStreaming={false}
                 />
               );
@@ -1152,6 +1189,7 @@ const ChatWindow = ({
                 onTopicClick={(topicCode) =>
                   handleTopicClick(topicCode, liveMessage.topics)
                 }
+                onOpenInspector={handleOpenInspector}
                 isStreaming={true}
               />
             )}
@@ -1688,6 +1726,13 @@ const ChatWindow = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Testing: Media & Source Inspector Drawer */}
+      <MediaInspectorDrawer
+        open={inspectorOpen}
+        onClose={handleCloseInspector}
+        data={inspectorData}
+      />
     </Box>
   );
 };

@@ -20,13 +20,28 @@ import FeedbackRatingButtons from "./FeedbackRatingButtons";
 
 import { resolveImageUrl } from "../../api/config";
 import PdfThumbnail from "./PdfThumbnail";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+
+// ─── Testing Feature Flag ───
+// Set to false to revert UI 100% to original layout with zero inspector/citation elements.
+export const ENABLE_MEDIA_INSPECTOR = true;
 
 // ─── Normalisers ───
-const normalizeVideo = (v) => ({
-  title: v.title || v.Title || "",
-  url: v.url || v.Url || v.videourl || "",
-  thumbnail: v.thumbnail || v.Thumbnail || "",
-});
+const normalizeVideo = (v) => {
+  const url = v.url || v.Url || v.videourl || "";
+  const rawId = v.video_id || v.Id || v.id || "";
+  const fallbackId = (!rawId && url) ? url.split("/").pop().split("?")[0].replace(/\.mp4$/i, "") : "";
+  return {
+    title: v.title || v.Title || "",
+    url: url,
+    thumbnail: v.thumbnail || v.Thumbnail || "",
+    video_id: String(rawId || fallbackId || ""),
+    topic_code: String(v.topic_code || ""),
+    topic_name: String(v.topic_name || ""),
+    source_type: String(v.source_type || "curriculum"),
+    content: String(v.content || ""),
+  };
+};
 
 const normalizeImage = (img) => {
   if (!img) return { title: "", url: "", thumbnail: "" };
@@ -415,6 +430,7 @@ const ChatMessage = ({
   messageIndex,
   onFeedbackSubmit,
   onTopicClick,
+  onOpenInspector,
   isStreaming,
   skipMarkdownFormatting = false,
   plainText = false,
@@ -589,6 +605,89 @@ const ChatMessage = ({
     return result;
   }, [msg.transcripts, msg.videos, videos_suggestions, isGreeting, isOutOfScope, isUser]);
 
+  // Topic metadata extraction
+  const primaryTopic = React.useMemo(() => {
+    if (!msg.topics || msg.topics.length === 0) return null;
+    const first = msg.topics[0];
+    if (typeof first === "object" && first !== null) {
+      return { code: String(first.code || first.topic_code || ""), name: String(first.name || first.topic_name || "") };
+    }
+    return { code: String(first), name: String(first) };
+  }, [msg.topics]);
+
+  // 1a. Dedicated Topic / Curriculum Videos (for testing inspector)
+  const topicVideos = React.useMemo(() => {
+    if (isGreeting || isOutOfScope || isUser) return [];
+    const firstTopicCode = primaryTopic?.code || "";
+    const firstTopicName = primaryTopic?.name || "";
+    const rawList = [
+      ...(videos_suggestions || []).map(normalizeVideo),
+      ...(msg.videos || []).map(normalizeVideo),
+    ];
+    const seen = new Set();
+    const result = [];
+    for (const v of rawList) {
+      if (!v || !v.url) continue;
+      const cleanUrl = v.url.trim().toLowerCase().replace(/\/+$/, "");
+      const cleanTitle = (v.title || "").trim().toLowerCase();
+      const key = cleanUrl || cleanTitle;
+      if (!key || seen.has(key) || (cleanTitle && seen.has(cleanTitle))) continue;
+      seen.add(key);
+      if (cleanTitle) seen.add(cleanTitle);
+
+      const resolvedTopicCode = v.topic_code || firstTopicCode || "";
+      const resolvedTopicName = v.topic_name || firstTopicName || "";
+      result.push({
+        ...v,
+        title: v.title || "Course video",
+        url: v.url,
+        thumbnail: v.thumbnail || (v.url.endsWith(".mp4") ? v.url.replace(/\.mp4$/i, ".png") : ""),
+        video_id: v.video_id || (v.url ? v.url.split("/").pop().split("?")[0].replace(/\.mp4$/i, "") : ""),
+        topic_code: resolvedTopicCode,
+        topic_name: resolvedTopicName,
+        source_type: "curriculum",
+      });
+      if (result.length >= 5) break;
+    }
+    return result;
+  }, [msg.videos, videos_suggestions, primaryTopic, isGreeting, isOutOfScope, isUser]);
+
+  // 1b. Dedicated Transcript-Matched Videos (for testing inspector)
+  const transcriptVideos = React.useMemo(() => {
+    if (isGreeting || isOutOfScope || isUser) return [];
+    const rawTranscripts = msg.transcripts || msg?.metadata?.transcripts || [];
+    const rawList = (rawTranscripts || []).map((t) => {
+      const vUrl = t.video_link || t.Url || t.url || t.videourl || "";
+      const vId = String(t.video_id || t.Id || t.id || (vUrl ? vUrl.split("/").pop().split("?")[0].replace(/\.mp4$/i, "") : ""));
+      return {
+        title: t.video_title || t.Title || t.title || (t.content ? `${t.content.substring(0, 45)}...` : "Course Video"),
+        url: vUrl,
+        thumbnail: t.video_thumbnail || t.thumbnail || t.Thumbnail || (vUrl ? vUrl.replace(/\.mp4$/i, ".png") : ""),
+        video_id: vId,
+        topic_code: String(t.topic_code || ""),
+        topic_name: String(t.topic_name || ""),
+        content: String(t.content || ""),
+        source_type: "transcript_vector",
+      };
+    });
+
+    const seen = new Set();
+    const result = [];
+    for (const v of rawList) {
+      if (!v || !v.url) continue;
+      const cleanUrl = v.url.trim().toLowerCase().replace(/\/+$/, "");
+      const cleanTitle = (v.title || "").trim().toLowerCase();
+      const key = cleanUrl || cleanTitle;
+      if (!key || seen.has(key) || (cleanTitle && seen.has(cleanTitle))) continue;
+      seen.add(key);
+      if (cleanTitle) seen.add(cleanTitle);
+
+      result.push(v);
+      if (result.length >= 5) break;
+    }
+    return result;
+  }, [msg.transcripts, msg?.metadata?.transcripts, isGreeting, isOutOfScope, isUser]);
+
   const [failedImageUrls, setFailedImageUrls] = useState(() => new Set());
 
   // 2. Unified, deduplicated images list (capped to strictly maximum 5; broken images and raw scanned text pages excluded)
@@ -750,6 +849,257 @@ const ChatMessage = ({
     return `${day}/${month}/${year}, ${time}`;
   };
 
+  const decorateWithCitations = (html, defaultCode = "") => {
+    if (!ENABLE_MEDIA_INSPECTOR || !html) return html;
+
+    // Collect all available topic metadata
+    const topicList = (msg.topics && msg.topics.length > 0)
+      ? msg.topics.map(t => typeof t === "object" && t !== null ? t : { code: String(t), name: String(t) })
+      : (primaryTopic ? [primaryTopic] : (topicVideos?.[0]?.topic_code ? [{ code: topicVideos[0].topic_code, name: topicVideos[0].topic_name || "Course Topic" }] : []));
+
+    const defaultTopic = topicList[0] || {
+      code: defaultCode || primaryTopic?.code || topicVideos?.[0]?.topic_code || "01",
+      name: primaryTopic?.name || topicVideos?.[0]?.topic_name || "Course Curriculum",
+    };
+
+    let output = html;
+
+    // Helper to format short clean display label
+    const formatDisplayCode = (code, name, index) => {
+      if (!code || code === "N/A") return `Topic ${index + 1}`;
+      if (code.length > 10) {
+        return `Topic: ${code.slice(0, 8)}…`;
+      }
+      return `Topic: ${code}`;
+    };
+
+    // 1. Replace explicit ref markers if present: @@SOURCE_REF_1@@ or [[Ref: 1]]
+    output = output.replace(
+      /(?:@@SOURCE_REF_|\[\[\s*Ref:?\s*)(\d+)\s*(?:@@|\]\])/gi,
+      (match, refNum) => {
+        const idx = Math.max(0, parseInt(refNum, 10) - 1);
+        const targetTopic = topicList[idx] || defaultTopic;
+        const disp = formatDisplayCode(targetTopic.code, targetTopic.name, idx);
+        return `<span class="citation-pill" data-ref="${targetTopic.code}" data-topic-name="${targetTopic.name}" style="display:inline-flex;align-items:center;padding:1px 6px;margin:0 4px;border-radius:4px;font-size:0.75rem;font-weight:700;cursor:pointer;background:rgba(2,132,199,0.15);color:#0284c7;border:1px solid rgba(2,132,199,0.3);vertical-align:baseline;transition:all 0.15s ease;" title="${targetTopic.name} [${targetTopic.code}] - Click to inspect source">[${disp}]</span>`;
+      }
+    );
+
+    // 2. Add citation badge to markdown section headings (h1, h2, h3, h4)
+    let headingCounter = 0;
+    const hasHeadings = /<\/(h[1-4])>/i.test(output);
+
+    output = output.replace(
+      /(<h[1-4][^>]*>)([\s\S]*?)(<\/(h[1-4])>)/gi,
+      (fullMatch, openTag, headingContent, closeTag) => {
+        // Find matching topic for this heading: either by keyword match or sequential distribution
+        let matchedTopic = null;
+        if (topicList.length > 1) {
+          const lowerHeading = headingContent.toLowerCase();
+          matchedTopic = topicList.find(t => {
+            if (!t.name) return false;
+            const words = t.name.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+            return words.some(w => lowerHeading.includes(w));
+          });
+        }
+        if (!matchedTopic) {
+          matchedTopic = topicList[headingCounter % Math.max(1, topicList.length)] || defaultTopic;
+        }
+        const disp = formatDisplayCode(matchedTopic.code, matchedTopic.name, headingCounter);
+        headingCounter++;
+
+        return `${openTag}${headingContent} <span class="citation-pill" data-ref="${matchedTopic.code}" data-topic-name="${matchedTopic.name}" style="display:inline-flex;align-items:center;padding:2px 7px;margin-left:6px;border-radius:4px;font-size:0.72rem;font-weight:700;cursor:pointer;background:rgba(2,132,199,0.15);color:#0284c7;border:1px solid rgba(2,132,199,0.3);vertical-align:middle;transition:all 0.15s ease;" title="${matchedTopic.name} [${matchedTopic.code}] - Click to inspect topic & media">[${disp}]</span>${closeTag}`;
+      }
+    );
+
+    // 3. If NO headings exist in the markdown output, append citation badge beside paragraphs (<p>)
+    if (!hasHeadings && topicList.length > 0) {
+      let pCounter = 0;
+      output = output.replace(
+        /(<\/p>)/gi,
+        (match) => {
+          const targetTopic = topicList[pCounter % topicList.length] || defaultTopic;
+          const disp = formatDisplayCode(targetTopic.code, targetTopic.name, pCounter);
+          pCounter++;
+          return ` <span class="citation-pill" data-ref="${targetTopic.code}" data-topic-name="${targetTopic.name}" style="display:inline-flex;align-items:center;padding:1px 6px;margin-left:6px;border-radius:4px;font-size:0.72rem;font-weight:700;cursor:pointer;background:rgba(2,132,199,0.15);color:#0284c7;border:1px solid rgba(2,132,199,0.3);vertical-align:middle;transition:all 0.15s ease;" title="${targetTopic.name} [${targetTopic.code}] - Click to inspect topic & media">[${disp}]</span>${match}`;
+        }
+      );
+    }
+
+    return output;
+  };
+
+  const handleMarkdownClick = (e) => {
+    const targetLink = e.target.closest("a");
+    if (targetLink) {
+      const href = targetLink.getAttribute("href") || "";
+      if (href.startsWith("#ask:") || href.startsWith("ask:")) {
+        e.preventDefault();
+        e.stopPropagation();
+        const rawQuery = href.startsWith("#ask:") ? href.slice(5) : href.slice(4);
+        const query = decodeURIComponent(rawQuery).trim();
+        if (query) {
+          handleFollowUpQuestion(query);
+        }
+        return;
+      }
+    }
+
+    // Handle in-text citation pill click
+    const citationBadge = e.target.closest(".citation-pill");
+    if (citationBadge) {
+      e.preventDefault();
+      e.stopPropagation();
+      const refId = citationBadge.getAttribute("data-ref") || primaryTopic?.code || topicVideos?.[0]?.topic_code || "01";
+      const refTopicName = citationBadge.getAttribute("data-topic-name") || primaryTopic?.name || topicVideos?.[0]?.topic_name || "Course Topic";
+
+      const matchedVideo = (topicVideos || []).find(v => v.topic_code === refId) ||
+        (transcriptVideos || []).find(v => v.topic_code === refId) ||
+        topicVideos?.[0] || transcriptVideos?.[0] || null;
+
+      const matchedImage = (normalizedImages || []).find(img => img.topic_code === refId) ||
+        normalizedImages?.[0] || null;
+
+      if (onOpenInspector) {
+        onOpenInspector({
+          sectionTitle: `Topic Source [${refId.length > 10 ? refId.slice(0, 8) + '…' : refId}]`,
+          topic_name: refTopicName,
+          topic_code: refId,
+          video: matchedVideo,
+          image: matchedImage,
+          pdf: normalizedPdfs?.[0] || null,
+        });
+      }
+    }
+  };
+
+  const renderSingleVideoCard = (video, i, badgeText, isSpeech = false) => (
+    <Box
+      key={`${video.url}-${i}`}
+      sx={mediaCardSx}
+      onClick={() => openPreview("video", video.url, video.title)}
+    >
+      {/* Test Mode: Origin badge + Info Inspector Icon */}
+      {ENABLE_MEDIA_INSPECTOR && (
+        <Box
+          sx={{
+            position: "absolute",
+            top: 6,
+            left: 6,
+            right: 6,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            zIndex: 3,
+            pointerEvents: "none",
+          }}
+        >
+          <Box
+            sx={{
+              bgcolor: isSpeech ? "rgba(245, 158, 11, 0.9)" : "rgba(2, 132, 199, 0.9)",
+              color: "#fff",
+              fontSize: "0.65rem",
+              fontWeight: 700,
+              px: 0.8,
+              py: 0.2,
+              borderRadius: "4px",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+              maxWidth: "75%",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {badgeText}
+          </Box>
+          <Box
+            sx={{
+              pointerEvents: "auto",
+              cursor: "pointer",
+              bgcolor: "rgba(15, 23, 42, 0.85)",
+              color: "#fff",
+              width: 22,
+              height: 22,
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+              "&:hover": {
+                bgcolor: "#0284c7",
+                transform: "scale(1.1)",
+              },
+              transition: "all 0.15s ease",
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onOpenInspector) {
+                onOpenInspector({
+                  sectionTitle: isSpeech ? "Transcript Vector Video" : "Curriculum Video",
+                  topic_name: video.topic_name || primaryTopic?.name || "Maritime Curriculum",
+                  topic_code: video.topic_code || primaryTopic?.code || "Curriculum",
+                  video,
+                });
+              }
+            }}
+            title="Inspect Provenance (Video ID & Topic Code)"
+          >
+            <InfoOutlinedIcon sx={{ fontSize: 14 }} />
+          </Box>
+        </Box>
+      )}
+
+      {video.thumbnail && (
+        <Box
+          component="img"
+          src={video.thumbnail}
+          alt={video.title}
+          sx={mediaThumbnailSx}
+          onError={(e) => {
+            e.target.style.display = 'none';
+            const fallback = e.target.nextElementSibling;
+            if (fallback && fallback.classList.contains('fallback-icon-container')) {
+              fallback.style.display = 'flex';
+            }
+          }}
+        />
+      )}
+      <Box
+        className="fallback-icon-container"
+        sx={{
+          ...mediaThumbnailSx,
+          display: video.thumbnail ? "none" : "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "background.paper",
+        }}
+      >
+        <VideoIcon size={40} color="primary.main" />
+      </Box>
+      <Box
+        sx={{
+          position: "absolute",
+          top: "40%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 36,
+          height: 36,
+          borderRadius: "50%",
+          backgroundColor: "rgba(0,0,0,0.45)",
+        }}
+      >
+        <PlayArrowRoundedIcon
+          sx={{ color: "#fff", fontSize: 22 }}
+        />
+      </Box>
+      <Typography variant="caption" sx={mediaCaptionSx}>
+        {video.title}
+      </Typography>
+    </Box>
+  );
+
   // ── Shared card style ───
   const mediaCardSx = {
     position: "relative",
@@ -897,6 +1247,66 @@ const ChatMessage = ({
                   </Box>
                 )}
 
+                {/* Test Mode: Interactive Topic Pill Banner */}
+                {ENABLE_MEDIA_INSPECTOR && !isUser && (Boolean(primaryTopic?.name) || Boolean(primaryTopic?.code) || (msg.topics && msg.topics.length > 0) || Boolean(topicVideos?.[0]?.topic_code)) && (
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8, mb: 1.5, alignItems: "center" }}>
+                    <Typography variant="caption" sx={{ color: "text.caption", fontWeight: 700, fontSize: "0.72rem" }}>
+                      TOPIC REF:
+                    </Typography>
+                    {(msg.topics && msg.topics.length > 0 ? msg.topics : [primaryTopic || { code: topicVideos?.[0]?.topic_code || "01", name: topicVideos?.[0]?.topic_name || "Course Topic" }]).map((t, tIdx) => {
+                      const tObj = typeof t === "object" && t !== null ? t : { code: String(t), name: String(t) };
+                      const tName = tObj.name || tObj.topic_name || primaryTopic?.name || topicVideos?.[0]?.topic_name || "Curriculum Lesson";
+                      const tCode = tObj.code || tObj.topic_code || primaryTopic?.code || topicVideos?.[0]?.topic_code || "Ref";
+                      return (
+                        <Box
+                          key={tIdx}
+                          onClick={() => {
+                            if (onOpenInspector) {
+                              onOpenInspector({
+                                sectionTitle: `Curriculum Lesson`,
+                                topic_name: tName,
+                                topic_code: tCode,
+                                video: topicVideos?.[0] || null,
+                                image: normalizedImages?.[0] || null,
+                                pdf: normalizedPdfs?.[0] || null,
+                              });
+                            }
+                          }}
+                          sx={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 0.6,
+                            cursor: "pointer",
+                            py: 0.3,
+                            px: 1,
+                            borderRadius: "6px",
+                            bgcolor: mode === "dark" ? "rgba(56, 189, 248, 0.12)" : "rgba(2, 132, 199, 0.08)",
+                            border: "1px solid",
+                            borderColor: mode === "dark" ? "rgba(56, 189, 248, 0.25)" : "rgba(2, 132, 199, 0.2)",
+                            color: mode === "dark" ? "#38bdf8" : "#0284c7",
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            "&:hover": {
+                              bgcolor: mode === "dark" ? "rgba(56, 189, 248, 0.2)" : "rgba(2, 132, 199, 0.16)",
+                              transform: "translateY(-1px)",
+                            },
+                            transition: "all 0.15s ease",
+                          }}
+                          title="Click to inspect Topic Code and media"
+                        >
+                          <span>{tName}</span>
+                          {tCode && (
+                            <span style={{ opacity: 0.85, fontFamily: "monospace", fontSize: "0.72rem", fontWeight: 700 }}>
+                              [{tCode}]
+                            </span>
+                          )}
+                          <InfoOutlinedIcon sx={{ fontSize: 13, ml: 0.2 }} />
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                )}
+
                 {/* Main content and Sources */}
                 <Box
                   sx={{
@@ -920,34 +1330,20 @@ const ChatMessage = ({
                     <Box
                       component="div"
                       className="chat-markdown"
-                      onClick={(e) => {
-                        const targetLink = e.target.closest("a");
-                        if (!targetLink) return;
-                        const href = targetLink.getAttribute("href") || "";
-                        if (href.startsWith("#ask:") || href.startsWith("ask:")) {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const rawQuery = href.startsWith("#ask:") ? href.slice(5) : href.slice(4);
-                          const query = decodeURIComponent(rawQuery).trim();
-                          if (query) {
-                            handleFollowUpQuestion(query);
-                          }
-                        }
-                      }}
+                      onClick={handleMarkdownClick}
                       sx={{
                         ...markdownContainerSx,
                         display: "block",
                       }}
                       dangerouslySetInnerHTML={{
-                        __html: sanitizeMarkdown(
-                          prepareClickableSubtopics(
-                            sanitizeDisplayContent(msg.content || ""),
-                            subtopicCandidates
-                          ),
-                          skipMarkdownFormatting
-                        ).replace(
-                          /(?:@@SOURCE_REF_|\[\[\s*Ref:?\s*)(\d+)\s*(?:@@|\]\])/gi,
-                          "",
+                        __html: decorateWithCitations(
+                          sanitizeMarkdown(
+                            prepareClickableSubtopics(
+                              sanitizeDisplayContent(msg.content || ""),
+                              subtopicCandidates
+                            ),
+                            skipMarkdownFormatting
+                          )
                         ),
                       }}
                     />
@@ -968,12 +1364,15 @@ const ChatMessage = ({
                   >
                     <Box
                       className="chat-markdown"
+                      onClick={handleMarkdownClick}
                       sx={{
                         ...markdownContainerSx,
                         display: "block",
                       }}
                       dangerouslySetInnerHTML={{
-                        __html: sanitizeMarkdown(msg.company_content || msg.companyContent, true),
+                        __html: decorateWithCitations(
+                          sanitizeMarkdown(msg.company_content || msg.companyContent, true)
+                        ),
                       }}
                     />
                   </Box>
@@ -1047,93 +1446,167 @@ const ChatMessage = ({
               </Box>
             )}
 
-            {/* All Videos (Strictly deduplicated, max 5) */}
-            {!isUser && shouldShowMedia && unifiedVideos.length > 0 && (
-              <Box sx={{ mt: 2.5 }}>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 0.5,
-                    mb: 1,
-                  }}
-                >
-                  <VideoIcon
-                    size={30}
-                    color={mode === "dark" ? "#e8f1fb" : "#0f1c2e"}
-                  />
-                  <Typography variant="h3" sx={{ color: "text.primary" }}>
-                    Videos
-                  </Typography>
-                </Box>
+            {/* Videos Section */}
+            {!isUser && shouldShowMedia && (
+              ENABLE_MEDIA_INSPECTOR ? (
+                <>
+                  {/* Part 1: Curriculum / Topic-Anchored Videos */}
+                  {topicVideos.length > 0 && (
+                    <Box sx={{ mt: 2.5 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, mb: 1 }}>
+                        <VideoIcon size={26} color={mode === "dark" ? "#e8f1fb" : "#0f1c2e"} />
+                        <Typography variant="h3" sx={{ color: "text.primary" }}>
+                          Part 1: Topic Videos (Curriculum Chunks)
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: "text.caption", ml: 0.5, fontWeight: 600 }}>
+                          ({topicVideos.length})
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", py: 1 }}>
+                        {topicVideos.map((v, i) =>
+                          renderSingleVideoCard(
+                            v,
+                            i,
+                            `Topic: ${v.topic_code || primaryTopic?.code || "Curriculum"}`,
+                            false
+                          )
+                        )}
+                      </Box>
+                    </Box>
+                  )}
 
-                <Box
-                  sx={{
-                    display: "flex",
-                    gap: 2,
-                    flexWrap: "wrap",
-                    py: 1,
-                  }}
-                >
-                  {unifiedVideos.map((video, i) => (
-                    <Box
-                      key={`${video.url}-${i}`}
-                      sx={mediaCardSx}
-                      onClick={() => openPreview("video", video.url, video.title)}
-                    >
-                      {video.thumbnail && (
-                        <Box
-                          component="img"
-                          src={video.thumbnail}
-                          alt={video.title}
-                          sx={mediaThumbnailSx}
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                            const fallback = e.target.nextElementSibling;
-                            if (fallback && fallback.classList.contains('fallback-icon-container')) {
-                              fallback.style.display = 'flex';
-                            }
-                          }}
-                        />
-                      )}
-                      <Box
-                        className="fallback-icon-container"
-                        sx={{
-                          ...mediaThumbnailSx,
-                          display: video.thumbnail ? "none" : "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          backgroundColor: "background.paper",
-                        }}
-                      >
-                        <VideoIcon size={40} color="primary.main" />
-                      </Box>
-                      <Box
-                        sx={{
-                          position: "absolute",
-                          top: "40%",
-                          left: "50%",
-                          transform: "translate(-50%, -50%)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          width: 36,
-                          height: 36,
-                          borderRadius: "50%",
-                          backgroundColor: "rgba(0,0,0,0.45)",
-                        }}
-                      >
-                        <PlayArrowRoundedIcon
-                          sx={{ color: "#fff", fontSize: 22 }}
-                        />
-                      </Box>
-                      <Typography variant="caption" sx={mediaCaptionSx}>
-                        {video.title}
+                  {/* Part 2: Transcript-Matched Videos */}
+                  <Box sx={{ mt: 2.5 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, mb: 1 }}>
+                      <VideoIcon size={26} color="#f59e0b" />
+                      <Typography variant="h3" sx={{ color: "text.primary" }}>
+                        Part 2: Spoken Search Videos (Transcript Matched)
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "text.caption", ml: 0.5, fontWeight: 600 }}>
+                        ({transcriptVideos.length})
                       </Typography>
                     </Box>
-                  ))}
-                </Box>
-              </Box>
+                    {transcriptVideos.length > 0 ? (
+                      <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", py: 1 }}>
+                        {transcriptVideos.map((v, i) =>
+                          renderSingleVideoCard(
+                            v,
+                            i,
+                            "Speech Match",
+                            true
+                          )
+                        )}
+                      </Box>
+                    ) : (
+                      <Box
+                        sx={{
+                          p: 1.5,
+                          borderRadius: 2,
+                          bgcolor: mode === "dark" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                          border: "1px dashed",
+                          borderColor: "divider",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1,
+                        }}
+                      >
+                        <Typography variant="caption" sx={{ color: "text.caption", fontStyle: "italic" }}>
+                          No spoken transcript matches found in audio database for this query.
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                </>
+              ) : (
+                /* Original Production Layout */
+                unifiedVideos.length > 0 && (
+                  <Box sx={{ mt: 2.5 }}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 0.5,
+                        mb: 1,
+                      }}
+                    >
+                      <VideoIcon
+                        size={30}
+                        color={mode === "dark" ? "#e8f1fb" : "#0f1c2e"}
+                      />
+                      <Typography variant="h3" sx={{ color: "text.primary" }}>
+                        Videos
+                      </Typography>
+                    </Box>
+
+                    <Box
+                      sx={{
+                        display: "flex",
+                        gap: 2,
+                        flexWrap: "wrap",
+                        py: 1,
+                      }}
+                    >
+                      {unifiedVideos.map((video, i) => (
+                        <Box
+                          key={`${video.url}-${i}`}
+                          sx={mediaCardSx}
+                          onClick={() => openPreview("video", video.url, video.title)}
+                        >
+                          {video.thumbnail && (
+                            <Box
+                              component="img"
+                              src={video.thumbnail}
+                              alt={video.title}
+                              sx={mediaThumbnailSx}
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                const fallback = e.target.nextElementSibling;
+                                if (fallback && fallback.classList.contains('fallback-icon-container')) {
+                                  fallback.style.display = 'flex';
+                                }
+                              }}
+                            />
+                          )}
+                          <Box
+                            className="fallback-icon-container"
+                            sx={{
+                              ...mediaThumbnailSx,
+                              display: video.thumbnail ? "none" : "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              backgroundColor: "background.paper",
+                            }}
+                          >
+                            <VideoIcon size={40} color="primary.main" />
+                          </Box>
+                          <Box
+                            sx={{
+                              position: "absolute",
+                              top: "40%",
+                              left: "50%",
+                              transform: "translate(-50%, -50%)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              width: 36,
+                              height: 36,
+                              borderRadius: "50%",
+                              backgroundColor: "rgba(0,0,0,0.45)",
+                            }}
+                          >
+                            <PlayArrowRoundedIcon
+                              sx={{ color: "#fff", fontSize: 22 }}
+                            />
+                          </Box>
+                          <Typography variant="caption" sx={mediaCaptionSx}>
+                            {video.title}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                )
+              )
             )}
 
             {/* PDF Suggestions */}
